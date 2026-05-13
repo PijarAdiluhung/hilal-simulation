@@ -12,6 +12,7 @@ const CONFIG = {
 const solarProgress = ref(5)
 const SUNMOON_GAP = ref(5)
 const AZIMUTH_GAP = ref(4)
+
 const moonRotation = computed(() => {
   // We calculate the angle between the moon and the sun
   const angleRad = Math.atan2(SUNMOON_GAP.value, AZIMUTH_GAP.value)
@@ -39,7 +40,7 @@ const SUNSET_TIMING = {
   riseStart: 5,
   peakStart: 2,
   peakEnd: -2,
-  fadeEnd: -7,
+  fadeEnd: -9,
 }
 
 const dayOpacity = computed(() => {
@@ -80,7 +81,7 @@ const syafaqOpacity = computed(() => {
   const p = solarProgress.value;
   
   // Syafaq appears as the sun dips below the horizon
-  if (p > 0.5 || p < -12) return 0;
+  if (p > 0.5 || p < -15) return 0;
   
   let intensity = 0;
   
@@ -93,8 +94,8 @@ const syafaqOpacity = computed(() => {
     intensity = 1;
   }
   // Fade out into deep night (-7 to -12)
-  else if (p < -7 && p >= -12) {
-    intensity = (12 + p) / 5;
+  else if (p < -7 && p >= -15) {
+    intensity = (15 + p) / 5;
   }
 
   // Cap at 0.5 for a realistic, subtle haze
@@ -108,7 +109,7 @@ const moonOpacity = computed(() => {
   }
 
   // 2. If conditions are met, calculate a fade-in effect
-  const darknessFactor = Math.abs(solarProgress.value + 3) * 0.1
+  const darknessFactor = Math.abs(solarProgress.value + 3) * 0.04
 
   // We cap the opacity at 1 (or 0.9 for a softer look)
   return Math.min(darknessFactor, 0.7)
@@ -118,7 +119,7 @@ const moonOpacity = computed(() => {
 const moonFilter = computed(() => {
   // If moon is near horizon (e.g., altitude < 5°) and Syafaq is active
   const proximityToHorizon = Math.max(0, 5 - lunarAltitude.value);
-  const blurAmount = proximityToHorizon * syafaqOpacity.value * 0.5;
+  const blurAmount = proximityToHorizon * syafaqOpacity.value * 1.4;
   const contrastAmount = 100 - (proximityToHorizon * syafaqOpacity.value * 10);
   
   return `blur(${blurAmount}px) contrast(${contrastAmount}%)`;
@@ -153,7 +154,7 @@ const groundBrightness = computed(() => {
 
     <!-- Syafaq (Atmospheric Glare Layer) -->
     <div
-      class="absolute inset-0 z-[5] transition-opacity duration-700 pointer-events-none"
+      class="absolute inset-0 z-5 transition-opacity duration-700 pointer-events-none"
       :style="{
         opacity: syafaqOpacity,
         background: `radial-gradient(circle at 50% ${CONFIG.HORIZON_Y}%, rgba(255, 160, 60, 0.6) 0%, rgba(255, 80, 0, 0.2) 40%, transparent 60%)`,
@@ -199,35 +200,36 @@ const groundBrightness = computed(() => {
       :style="{ filter: groundBrightness }"
     ></div>
 
-    <!-- Interface -->
-    <div
-      class="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-60 bg-black/40 backdrop-blur-xl p-3 rounded-xl border border-white/10 shadow-2xl"
-    >
-      <div
-        class="flex justify-between text-white/40 text-[10px] mb-2 font-bold tracking-widest uppercase"
-      >
-        <span>Night</span>
-        <span>Day</span>
+    <!-- Control Panel -->
+    <div class="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-72 bg-black/60 backdrop-blur-2xl p-5 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4">
+      
+      <!-- Slider 1: Sun -->
+      <div class="flex flex-col gap-2 -mt-1">
+        <div class="flex justify-between items-center">
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Solar Altitude</span>
+          <span class="text-white font-mono text-sm">{{ solarProgress.toFixed(1) }}°</span>
+        </div>
+        <input v-model.number="solarProgress" type="range" min="-12" max="10" step="0.1" class="custom-slider" />
       </div>
 
-      <input
-        v-model.number="solarProgress"
-        type="range"
-        min="-10"
-        max="5"
-        step="0.1"
-        class="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
-      />
-
-      <!-- Update the text display -->
-      <div class="mt-4 flex flex-col items-center">
-        <span class="text-[10px] text-white/40 font-bold tracking-widest uppercase"
-          >Solar Altitude</span
-        >
-        <span class="text-white font-light text-4xl tracking-tighter tabular-nums">
-          {{ solarProgress.toFixed(1) }}°
-        </span>
+      <!-- Slider 2: Sun-Moon Gap -->
+      <div class="flex flex-col gap-2">
+        <div class="flex justify-between items-center">
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Sun-Moon Gap</span>
+          <span class="text-white font-mono text-sm">{{ SUNMOON_GAP.toFixed(1) }}°</span>
+        </div>
+        <input v-model.number="SUNMOON_GAP" type="range" min="0" max="9" step="0.1" class="custom-slider" />
       </div>
+
+      <!-- Slider 3: Azimuth -->
+      <div class="flex flex-col gap-2">
+        <div class="flex justify-between items-center">
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Azimuth Gap</span>
+          <span class="text-white font-mono text-sm">{{ AZIMUTH_GAP.toFixed(1) }}°</span>
+        </div>
+        <input v-model.number="AZIMUTH_GAP" type="range" min="-5.2" max="5.2" step="0.1" class="custom-slider" />
+      </div>
+
     </div>
 
     <!-- Bottom Stats -->
