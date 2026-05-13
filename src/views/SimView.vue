@@ -11,11 +11,17 @@ const sunY = computed(() => 10 + solarProgress.value * 1)
 const moonY = computed(() => sunY.value - ELONGATION_GAP)
 
 // SKY LOGIC
-const dayOpacity = computed(() => (solarProgress.value < 60 ? 1 : 0))
-const sunsetOpacity = computed(() =>
-  solarProgress.value > 40 && solarProgress.value < 100 ? 1 : 0,
-)
-const nightOpacity = computed(() => (solarProgress.value >= 90 ? 1 : 0))
+const dayOpacity = computed(() => (solarProgress.value < 30 ? 1 : 0))
+const sunsetOpacity = computed(() => {
+  if (solarProgress.value <= 25) return 0
+  if (solarProgress.value <= 70) return 1 // Peak sunset brightness
+
+  // As it moves from 70 to 100, calculate a value from 1 down to 0
+  // Formula: 1 - (progress - start) / (end - start)
+  const fadeOut = 1 - (solarProgress.value - 55) / (100 - 55)
+  return Math.max(0, fadeOut)
+})
+const nightOpacity = computed(() => (solarProgress.value >= 70 ? 1 : 0))
 
 // MOON VISIBILITY LOGIC
 const moonOpacity = computed(() => {
@@ -69,8 +75,6 @@ const groundBrightness = computed(() => `brightness(${Math.max(110 - solarProgre
             class="absolute inset-0 bg-white/90 rounded-full"
             style="clip-path: path('M 40,0 A 40,40 0 1,1 40,80 A 32,37 0 1,0 40,0 Z')"
           ></div>
-          <!-- Subtle Glow -->
-          <div class="absolute inset-0 bg-white/20 blur-md rounded-full"></div>
         </div>
       </div>
     </div>
