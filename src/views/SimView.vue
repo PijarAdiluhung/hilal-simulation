@@ -76,6 +76,31 @@ const nightOpacity = computed(() => {
   return 0
 })
 
+const syafaqOpacity = computed(() => {
+  const p = solarProgress.value;
+  
+  // Syafaq appears as the sun dips below the horizon
+  if (p > 0.5 || p < -12) return 0;
+  
+  let intensity = 0;
+  
+  // Fade in as sun sets (0 to -3)
+  if (p <= 0.5 && p > -3) {
+    intensity = (0.5 - p) / 3.5;
+  } 
+  // Peak intensity plateau (-3 to -7)
+  else if (p <= -3 && p >= -7) {
+    intensity = 1;
+  }
+  // Fade out into deep night (-7 to -12)
+  else if (p < -7 && p >= -12) {
+    intensity = (12 + p) / 5;
+  }
+
+  // Cap at 0.5 for a realistic, subtle haze
+  return intensity * 0.5;
+});
+
 const moonOpacity = computed(() => {
   // 1. Check if the sun is low enough (-3°) and elongation is sufficient (6.4°)
   if (solarProgress.value > -3 || elongation.value < 6.4) {
@@ -88,6 +113,16 @@ const moonOpacity = computed(() => {
   // We cap the opacity at 1 (or 0.9 for a softer look)
   return Math.min(darknessFactor, 0.7)
 })
+
+// Add this computed property to calculate "Sighting Difficulty"
+const moonFilter = computed(() => {
+  // If moon is near horizon (e.g., altitude < 5°) and Syafaq is active
+  const proximityToHorizon = Math.max(0, 5 - lunarAltitude.value);
+  const blurAmount = proximityToHorizon * syafaqOpacity.value * 0.5;
+  const contrastAmount = 100 - (proximityToHorizon * syafaqOpacity.value * 10);
+  
+  return `blur(${blurAmount}px) contrast(${contrastAmount}%)`;
+});
 
 const groundBrightness = computed(() => {
   // Ground darkens as the sun crosses the -0.25° threshold
@@ -116,6 +151,15 @@ const groundBrightness = computed(() => {
       :style="{ opacity: sunsetOpacity }"
     ></div>
 
+    <!-- Syafaq (Atmospheric Glare Layer) -->
+    <div
+      class="absolute inset-0 z-[5] transition-opacity duration-700 pointer-events-none"
+      :style="{
+        opacity: syafaqOpacity,
+        background: `radial-gradient(circle at 50% ${CONFIG.HORIZON_Y}%, rgba(255, 160, 60, 0.6) 0%, rgba(255, 80, 0, 0.2) 40%, transparent 60%)`,
+      }"
+    ></div>
+
     <!-- Celestial Bodies -->
     <div class="absolute inset-0 z-10">
       <!-- Sun -->
@@ -134,6 +178,7 @@ const groundBrightness = computed(() => {
         :style="{
           top: moonY + '%',
           opacity: moonOpacity,
+          filter: moonFilter,
           transform: `translateX(calc(-50% + ${AZIMUTH_GAP * -CONFIG.VISUAL_SCALE}vh)) 
                 scale(${CONFIG.MOON_SCALE}) 
                 rotate(${moonRotation}deg)`,
