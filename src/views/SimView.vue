@@ -1,56 +1,92 @@
 <script setup>
 import { ref, computed } from 'vue'
 
-const solarProgress = ref(5) // Starting a bit above the sunset start
-
-// Constants for positioning
-const ELONGATION_GAP = 3
-const sunSize = ref(50)
-const moonScale = ref(0.8)
-
-const getPosition = (altitude) => {
-  const horizonY = 72 // The horizon line percentage
-  // Each degree now moves the sun more significantly to account for the smaller range
-  return horizonY - altitude * 20
+// --- CONFIGURATION ---
+const CONFIG = {
+  HORIZON_Y: 72, // Percent from top
+  VISUAL_SCALE: 20, // 1 degree = 20 units (vh/%)
+  SUN_SIZE: 50, // px
+  MOON_SCALE: 0.8,
 }
 
-const sunY = computed(() => getPosition(solarProgress.value))
-const moonY = computed(() => getPosition(solarProgress.value + ELONGATION_GAP))
+const solarProgress = ref(5)
+const SUNMOON_GAP = ref(5)
+const AZIMUTH_GAP = ref(4)
+const moonRotation = computed(() => {
+  // We calculate the angle between the moon and the sun
+  const angleRad = Math.atan2(SUNMOON_GAP.value, AZIMUTH_GAP.value)
 
-// SKY LOGIC
+  // Convert radians to degrees
+  const angleDeg = angleRad * (180 / Math.PI)
+
+  return angleDeg
+})
+
+// --- POSITIONING LOGIC ---
+// Now vertical (%) and horizontal (vh) use the same CONFIG.VISUAL_SCALE
+const getVerticalPos = (altitude) => CONFIG.HORIZON_Y - altitude * CONFIG.VISUAL_SCALE
+
+const sunY = computed(() => getVerticalPos(solarProgress.value))
+const moonY = computed(() => getVerticalPos(solarProgress.value + SUNMOON_GAP.value))
+const lunarAltitude = computed(() => solarProgress.value + SUNMOON_GAP.value)
+
+const elongation = computed(() => {
+  return Math.sqrt(Math.pow(SUNMOON_GAP.value, 2) + Math.pow(AZIMUTH_GAP.value, 2))
+})
+
+// --- SKY STATES ---
+const SUNSET_TIMING = {
+  riseStart: 5,
+  peakStart: 2,
+  peakEnd: -2,
+  fadeEnd: -7,
+}
+
 const dayOpacity = computed(() => {
-  // Day sky fades out as we approach the 0.25° mark
   if (solarProgress.value > 0.5) return 1
   return Math.max(0, (solarProgress.value + 0.25) / 0.75)
 })
 
 const sunsetOpacity = computed(() => {
-  const alt = solarProgress.value
+  const p = solarProgress.value
+  const { riseStart, peakStart, peakEnd, fadeEnd } = SUNSET_TIMING
 
-  // Start fading in sunset colors earlier (e.g., 5°) so it's not a jump
-  if (alt > 5) return 0
-  if (alt > 0.25) return (5 - alt) / 4.75
+  // 1. Outside the range
+  if (p >= riseStart || p <= fadeEnd) return 0
 
-  // Peak intensity right at the horizon window
-  if (alt <= 0.25 && alt >= -0.25) return 1
+  // 2. The Peak Plateau (Full Opacity)
+  if (p <= peakStart && p >= peakEnd) return 1
 
-  // Fade out into deep night after the sun is fully down
-  if (alt > -5) return (alt + 5) / 4.75
+  // 3. The Fade-In Ramp (Descending from 5 to 2)
+  if (p < riseStart && p > peakStart) {
+    return (riseStart - p) / (riseStart - peakStart)
+  }
+
+  // 4. The Fade-Out Ramp (Descending from -2 to -7)
+  if (p < peakEnd && p > fadeEnd) {
+    return (p - fadeEnd) / (peakEnd - fadeEnd)
+  }
+
   return 0
 })
 
 const nightOpacity = computed(() => {
-  // Night sky fully takes over once sun disk is down (-0.25°)
   if (solarProgress.value < -0.25) return 1
   if (solarProgress.value < 0.5) return 1 - (solarProgress.value + 0.25) / 0.75
   return 0
 })
 
-// MOON VISIBILITY
 const moonOpacity = computed(() => {
-  if (solarProgress.value > -1) return 0
-  const visibility = Math.abs(solarProgress.value - -1) * 0.1
-  return Math.min(visibility, 0.8)
+  // 1. Check if the sun is low enough (-3°) and elongation is sufficient (6.4°)
+  if (solarProgress.value > -3 || elongation.value < 6.4) {
+    return 0
+  }
+
+  // 2. If conditions are met, calculate a fade-in effect
+  const darknessFactor = Math.abs(solarProgress.value + 3) * 0.1
+
+  // We cap the opacity at 1 (or 0.9 for a softer look)
+  return Math.min(darknessFactor, 0.7)
 })
 
 const groundBrightness = computed(() => {
@@ -80,24 +116,27 @@ const groundBrightness = computed(() => {
       :style="{ opacity: sunsetOpacity }"
     ></div>
 
-    <div>
+    <!-- Celestial Bodies -->
+    <div class="absolute inset-0 z-10">
       <!-- Sun -->
       <div
         class="absolute left-1/2 -translate-x-1/2 rounded-full bg-yellow-50 blur-[1px] shadow-[0_0_60px_20px_rgba(255,252,231,0.5)] transition-all duration-300"
         :style="{
           top: sunY + '%',
-          width: sunSize + 'px',
-          height: sunSize + 'px',
+          width: CONFIG.SUN_SIZE + 'px',
+          height: CONFIG.SUN_SIZE + 'px',
         }"
       ></div>
 
-      <!-- The Crescent -->
+      <!-- Moon -->
       <div
         class="absolute left-1/2 transition-all duration-300"
         :style="{
           top: moonY + '%',
           opacity: moonOpacity,
-          transform: `translateX(-90px) scale(${moonScale}) rotate(65deg)`,
+          transform: `translateX(calc(-50% + ${AZIMUTH_GAP * -CONFIG.VISUAL_SCALE}vh)) 
+                scale(${CONFIG.MOON_SCALE}) 
+                rotate(${moonRotation}deg)`,
         }"
       >
         <div class="relative w-20 h-20">
@@ -117,10 +156,10 @@ const groundBrightness = computed(() => {
 
     <!-- Interface -->
     <div
-      class="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-80 bg-black/40 backdrop-blur-xl p-6 rounded-3xl border border-white/10 shadow-2xl"
+      class="absolute top-5 left-1/2 -translate-x-1/2 z-20 w-60 bg-black/40 backdrop-blur-xl p-3 rounded-xl border border-white/10 shadow-2xl"
     >
       <div
-        class="flex justify-between text-white/40 text-[10px] mb-4 font-bold tracking-widest uppercase"
+        class="flex justify-between text-white/40 text-[10px] mb-2 font-bold tracking-widest uppercase"
       >
         <span>Night</span>
         <span>Day</span>
@@ -129,20 +168,51 @@ const groundBrightness = computed(() => {
       <input
         v-model.number="solarProgress"
         type="range"
-        min="-7"
+        min="-10"
         max="5"
         step="0.1"
         class="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
       />
 
       <!-- Update the text display -->
-      <div class="mt-6 flex flex-col items-center">
+      <div class="mt-4 flex flex-col items-center">
         <span class="text-[10px] text-white/40 font-bold tracking-widest uppercase"
           >Solar Altitude</span
         >
         <span class="text-white font-light text-4xl tracking-tighter tabular-nums">
           {{ solarProgress.toFixed(1) }}°
         </span>
+      </div>
+    </div>
+
+    <!-- Bottom Stats -->
+    <div
+      class="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex gap-8 px-8 py-4 bg-black/30 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl"
+    >
+      <div class="flex flex-col items-center">
+        <span
+          class="text-[9px] text-white/30 font-bold tracking-[0.2em] uppercase mb-1 whitespace-nowrap"
+          >Lunar Altitude</span
+        >
+        <div class="flex items-baseline gap-1">
+          <span class="text-white font-medium text-2xl tabular-nums"
+            >{{ lunarAltitude.toFixed(1) }}°</span
+          >
+        </div>
+      </div>
+
+      <!-- Vertical Divider -->
+      <div class="w-px h-10 bg-white/10 self-center"></div>
+
+      <div class="flex flex-col items-center">
+        <span class="text-[9px] text-white/30 font-bold tracking-[0.2em] uppercase mb-1"
+          >Elongation</span
+        >
+        <div class="flex items-baseline gap-1">
+          <span class="text-white font-medium text-2xl tabular-nums"
+            >{{ elongation.toFixed(1) }}°</span
+          >
+        </div>
       </div>
     </div>
   </div>
