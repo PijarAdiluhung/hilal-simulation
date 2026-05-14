@@ -2,52 +2,44 @@
 import { ref, computed } from 'vue'
 
 // --- CONFIGURATION ---
+const zoom = ref(1) // 1 = Default, 4 = Zoomed out
+
 const CONFIG = {
   HORIZON_Y: 72, // Percent from top
-  VISUAL_SCALE: 20, // 1 degree = 20 units (vh/%)
-  SUN_SIZE: 50, // px
-  MOON_SCALE: 0.8,
+  MOON_RATIO: 1.0,
 }
 
 const solarProgress = ref(5)
-const SUNMOON_GAP = ref(9)
-const AZIMUTH_GAP = ref(0)
+const SUNMOON_GAP = ref(7)
+const LUNAR_INCLINATION = ref(0.5)
 const celestialTilt = ref(90)
+
+const visualScale = computed(() => 20 / zoom.value) // 1 degree = 20 units (vh/%)
+const sunSize = computed(() => 50 / zoom.value) // px
+const moonSize = computed(() => sunSize.value * CONFIG.MOON_RATIO)
 
 // Helper to convert degrees to radians
 const toRad = (deg) => deg * (Math.PI / 180)
 
-const moonRotation = computed(() => {
-  // 1. Get the geometric angle between Sun and Moon based on your gaps
-  const angleRad = Math.atan2(SUNMOON_GAP.value, AZIMUTH_GAP.value)
-  const angleDeg = angleRad * (180 / Math.PI)
-
-  // 2. Adjust for the celestial tilt. 
-  // We subtract 90 because when tilt is 90 (vertical), 
-  // the moon's "down" is the sun.
-  const tiltAdjustment = celestialTilt.value - 90
-
-  return angleDeg + tiltAdjustment
-})
-
 // --- NEW POSITIONING LOGIC ---
-const getPosition = (altitude, azimuthOffset = 0) => {
-  // 1. Center of rotation (The point on the horizon)
+const getPosition = (altitude, inclinationOffset = 0) => {
   const centerX = 50 // %
   const centerY = CONFIG.HORIZON_Y // %
 
-  // 2. Adjust angle so 90° is vertical
-  // In screen space, 0° is usually horizontal right.
-  // We want 90° to be "straight up".
-  const angleRad = toRad(celestialTilt.value - 90)
+  // 1. Convert our tilt to Radians
+  // We subtract 90 because we want 90° to be vertical (up/down)
+  const tiltRad = toRad(celestialTilt.value - 90)
 
-  // 3. Calculate raw offsets based on your scale
-  const rawX = azimuthOffset * CONFIG.VISUAL_SCALE // vh units
-  const rawY = -altitude * CONFIG.VISUAL_SCALE // % units (negative because up is smaller Y)
+  // 2. The "Local" coordinates (relative to the sun's path)
+  // localX is the sideways distance (inclination)
+  // localY is the altitude distance
+  const localX = inclinationOffset * visualScale.value
+  const localY = -altitude * visualScale.value
 
-  // 4. Apply Rotation Matrix
-  const rotatedX = rawX * Math.cos(angleRad) - rawY * Math.sin(angleRad)
-  const rotatedY = rawX * Math.sin(angleRad) + rawY * Math.cos(angleRad)
+  // 3. Apply Rotation Matrix to the coordinates
+  // This swings the localX and localY based on the tilt
+  const rotatedX = localX * Math.cos(tiltRad) - localY * Math.sin(tiltRad)
+  const rotatedY = localX * Math.sin(tiltRad) + localY * Math.cos(tiltRad)
 
   return {
     left: `calc(${centerX}% + ${rotatedX}vh)`,
@@ -55,13 +47,63 @@ const getPosition = (altitude, azimuthOffset = 0) => {
   }
 }
 
-const sunPos = computed(() => getPosition(solarProgress.value, 0))
-const moonPos = computed(() => getPosition(lunarAltitude.value, AZIMUTH_GAP.value))
+// IMPORTANT: We must calculate the Moon relative to the Sun's progress
+const moonPos = computed(() => {
+  // Use the solarProgress as the base, and add the gap
+  // This ensures they stay locked to the same tilted "track"
+  return getPosition(solarProgress.value + SUNMOON_GAP.value, LUNAR_INCLINATION.value)
+})
+
+const sunPos = computed(() => {
+  // Sun has 0 inclination offset relative to its own path
+  return getPosition(solarProgress.value, 0)
+})
+
+const moonRotation = computed(() => {
+  // 1. Get the screen positions as raw numbers
+  // We need to strip the 'vh', '%' and 'calc' to get clean coordinates
+  // A simpler way is to re-run the logic or use the raw rotated values:
+
+  const tiltRad = toRad(celestialTilt.value - 90)
+
+  // Sun local position
+  const sX = 0
+  const sY = -solarProgress.value * visualScale.value
+  const sunRotX = sX * Math.cos(tiltRad) - sY * Math.sin(tiltRad)
+  const sunRotY = sX * Math.sin(tiltRad) + sY * Math.cos(tiltRad)
+
+  // Moon local position
+  const mX = LUNAR_INCLINATION.value * visualScale.value
+  const mY = -(solarProgress.value + SUNMOON_GAP.value) * visualScale.value
+  const moonRotX = mX * Math.cos(tiltRad) - mY * Math.sin(tiltRad)
+  const moonRotY = mX * Math.sin(tiltRad) + mY * Math.cos(tiltRad)
+
+  // 2. Calculate the delta between them
+  const deltaX = sunRotX - moonRotX
+  const deltaY = sunRotY - moonRotY
+
+  // 3. Calculate the angle (atan2 is perfect for this)
+  // We add 90 because the moon's default "0" rotation
+  // (the crescent belly) is pointing right.
+  const angleRad = Math.atan2(deltaY, deltaX)
+  const angleDeg = angleRad * (180 / Math.PI)
+
+  return angleDeg
+})
 
 const lunarAltitude = computed(() => solarProgress.value + SUNMOON_GAP.value)
 
+const altitudeAtSunset = computed(() => {
+  // When solarProgress is 0, the moon's position along the path is just the GAP.
+  // To get the vertical altitude relative to the horizon at that moment:
+  const tiltRad = toRad(celestialTilt.value)
+
+  // vertical_component = path_distance * sin(tilt)
+  return SUNMOON_GAP.value * Math.sin(tiltRad)
+})
+
 const elongation = computed(() => {
-  return Math.sqrt(Math.pow(SUNMOON_GAP.value, 2) + Math.pow(AZIMUTH_GAP.value, 2))
+  return Math.sqrt(Math.pow(SUNMOON_GAP.value, 2) + Math.pow(LUNAR_INCLINATION.value, 2))
 })
 
 // --- SKY STATES ---
@@ -132,23 +174,25 @@ const syafaqOpacity = computed(() => {
 })
 
 const moonOpacity = computed(() => {
-  // 1. Check if the sun is low enough (-3°) and elongation is sufficient (6.4°)
-  if (solarProgress.value > -3 || elongation.value < 6.4) {
+  // 1. Check if the sun is low enough (-3°) and elongation is sufficient (6.2°)
+  if (solarProgress.value > -3 || elongation.value < 6.2) {
     return 0
   }
 
   // 2. If conditions are met, calculate a fade-in effect
-  const darknessFactor = Math.abs(solarProgress.value + 3) * 0.04
+  const multiplier = 0.1 / zoom.value
+  const darknessFactor = Math.abs(solarProgress.value + 3) * multiplier
 
-  // We cap the opacity at 1 (or 0.9 for a softer look)
-  return Math.min(darknessFactor, 0.7)
+  // We cap the opacity at 0.9 for a softer look
+  return Math.min(darknessFactor, 0.9)
 })
 
 // Add this computed property to calculate "Sighting Difficulty"
 const moonFilter = computed(() => {
   // If moon is near horizon (e.g., altitude < 5°) and Syafaq is active
   const proximityToHorizon = Math.max(0, 5 - lunarAltitude.value)
-  const blurAmount = proximityToHorizon * syafaqOpacity.value * 1.4
+  const blurMultiplier = 1.6 / zoom.value
+  const blurAmount = proximityToHorizon * syafaqOpacity.value * blurMultiplier
   const contrastAmount = 100 - proximityToHorizon * syafaqOpacity.value * 10
 
   return `blur(${blurAmount}px) contrast(${contrastAmount}%)`
@@ -186,7 +230,12 @@ const groundBrightness = computed(() => {
       class="absolute inset-0 z-5 transition-opacity duration-700 pointer-events-none"
       :style="{
         opacity: syafaqOpacity,
-        background: `radial-gradient(circle at 50% ${CONFIG.HORIZON_Y}%, rgba(255, 160, 60, 0.6) 0%, rgba(255, 80, 0, 0.2) 40%, transparent 60%)`,
+        background: `radial-gradient(
+      circle at 50% ${CONFIG.HORIZON_Y}%, 
+      rgba(255, 160, 60, 0.6) 0%, 
+      rgba(255, 80, 0, 0.2) ${40 / zoom}%, 
+      transparent ${60 / zoom}%
+    )`,
       }"
     ></div>
 
@@ -198,11 +247,12 @@ const groundBrightness = computed(() => {
         :style="{
           left: sunPos.left,
           top: sunPos.top,
-          width: CONFIG.SUN_SIZE + 'px',
-          height: CONFIG.SUN_SIZE + 'px',
+          width: sunSize + 'px',
+          height: sunSize + 'px',
         }"
       ></div>
 
+      <!-- Moon -->
       <!-- Moon -->
       <div
         class="absolute left-1/2 transition-all duration-300"
@@ -211,16 +261,16 @@ const groundBrightness = computed(() => {
           top: moonPos.top,
           opacity: moonOpacity,
           filter: moonFilter,
-          transform: `translateX(calc(-50% + ${AZIMUTH_GAP * -CONFIG.VISUAL_SCALE}vh)) 
-                scale(${CONFIG.MOON_SCALE}) 
-                rotate(${moonRotation}deg)`,
+          transform: `translate(-50%, -50%) rotate(${moonRotation}deg)`, // Removed scale
+          width: moonSize + 'px',
+          height: moonSize + 'px',
         }"
       >
-        <div class="relative w-20 h-20">
-          <div
-            class="absolute inset-0 bg-white/90 rounded-full"
-            style="clip-path: path('M 40,0 A 40,40 0 1,1 40,80 A 32,37 0 1,0 40,0 Z')"
-          ></div>
+        <div class="relative w-full h-full">
+          <!-- Changed from fixed w-20 h-20 -->
+          <svg viewBox="0 0 80 80" class="fill-white/90 w-full h-full">
+            <path d="M 40,0 A 40,40 0 1,1 40,80 A 32,37 0 1,0 40,0 Z" />
+          </svg>
         </div>
       </div>
     </div>
@@ -271,16 +321,16 @@ const groundBrightness = computed(() => {
         />
       </div>
 
-      <!-- Slider 3: Azimuth -->
+      <!-- Slider 3: Inclination -->
       <div class="flex flex-col gap-2">
         <div class="flex justify-between items-center">
           <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
-            >Azimuth Gap</span
+            >Lunar Inclination</span
           >
-          <span class="text-white font-mono text-sm">{{ AZIMUTH_GAP.toFixed(1) }}°</span>
+          <span class="text-white font-mono text-sm">{{ LUNAR_INCLINATION.toFixed(1) }}°</span>
         </div>
         <input
-          v-model.number="AZIMUTH_GAP"
+          v-model.number="LUNAR_INCLINATION"
           type="range"
           min="-5.2"
           max="5.2"
@@ -306,21 +356,38 @@ const groundBrightness = computed(() => {
           class="custom-slider"
         />
       </div>
+
+      <!-- Slider 5: Zoom -->
+      <div class="flex flex-col gap-2 pt-2 border-t border-white/10">
+        <div class="flex justify-between items-center">
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Zoom</span>
+          <span class="text-white font-mono text-sm">{{ (1/zoom).toFixed(2) }}x</span>
+        </div>
+        <input
+          v-model.number="zoom"
+          type="range"
+          min="1"
+          max="4"
+          step="0.1"
+          class="custom-slider"
+        />
+      </div>
     </div>
 
     <!-- Bottom Stats -->
     <div
-      class="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex gap-8 px-8 py-4 bg-black/30 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl"
+      class="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex gap-8 px-8 py-4 bg-black/30 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl"
     >
       <div class="flex flex-col items-center">
         <span
           class="text-[9px] text-white/30 font-bold tracking-[0.2em] uppercase mb-1 whitespace-nowrap"
-          >Lunar Altitude</span
         >
+          Alt. at Sunset (0°)
+        </span>
         <div class="flex items-baseline gap-1">
-          <span class="text-white font-medium text-2xl tabular-nums"
-            >{{ lunarAltitude.toFixed(1) }}°</span
-          >
+          <span class="text-white font-medium text-2xl tabular-nums">
+            {{ altitudeAtSunset.toFixed(1) }}°
+          </span>
         </div>
       </div>
 
