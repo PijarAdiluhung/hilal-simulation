@@ -2,10 +2,11 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useCelestialMath } from '../composables/useCelestialMath'
 
-// Components (To be created next)
+// Components 
 import SkyBackground from '../components/SkyBackground.vue'
 import CelestialBody from '../components/CelestialBody.vue'
 import GuidingAids from '../components/GuidingAids.vue'
+import ReferenceLines from '../components/ReferenceLines.vue'
 import ControlPanel from '../components/ControlPanel.vue'
 import StatsOverlay from '../components/StatsOverlay.vue'
 
@@ -29,11 +30,12 @@ const {
   altitudeAtSunset,
   elongation,
   groundBrightness,
-  updateWindowRatio
+  updateWindowRatio,
 } = useCelestialMath()
 
 const isCollapsed = ref(true)
 const showGuidingAids = ref(false)
+const showPlanes = ref(false)
 
 // Handle window resizing for the coordinate system
 onMounted(() => {
@@ -47,23 +49,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative w-full h-screen overflow-hidden flex flex-col font-sans select-none bg-black">
-    
+  <div
+    class="relative w-full h-screen overflow-hidden flex flex-col font-sans select-none bg-black"
+  >
     <!-- 1. The Sky Layers (Atmosphere) -->
-    <SkyBackground 
-      :progress="solarProgress" 
-      :zoom="zoom" 
-      :horizon-y="CONFIG.HORIZON_Y" 
-    />
+    <SkyBackground :progress="solarProgress" :zoom="zoom" :horizon-y="CONFIG.HORIZON_Y" />
 
     <!-- 2. The Celestial Layer -->
     <div class="absolute inset-0 z-10 pointer-events-none">
       <!-- Sun -->
-      <CelestialBody
-        type="sun"
-        :pos="sunPos"
-        :size="50 / zoom"
-      />
+      <CelestialBody type="sun" :pos="sunPos" :size="50 / zoom" />
 
       <!-- Moon -->
       <CelestialBody
@@ -82,7 +77,17 @@ onUnmounted(() => {
         :moon-bounds="moonBounds"
         :lunar-altitude="lunarAltitude"
         :horizon-y="CONFIG.HORIZON_Y"
-        :size="(50 / zoom) + 20"
+        :size="50 / zoom + 20"
+      />
+
+      <!-- Reference Lines -->
+      <ReferenceLines
+        v-if="showPlanes"
+        :sun-pos="sunPos"
+        :moon-pos="moonPos"
+        :tilt="celestialTilt"
+        :horizon-y="CONFIG.HORIZON_Y"
+        :zoom="zoom"
       />
     </div>
 
@@ -104,14 +109,11 @@ onUnmounted(() => {
       v-model:tilt="celestialTilt"
       v-model:zoom="zoom"
       v-model:show-aids="showGuidingAids"
+      v-model:show-planes="showPlanes"
     />
 
     <!-- 5. Bottom Data Readout -->
-    <StatsOverlay 
-      :altitude="altitudeAtSunset" 
-      :elongation="elongation" 
-    />
-    
+    <StatsOverlay :altitude="altitudeAtSunset" :elongation="elongation" />
   </div>
 </template>
 

@@ -5,7 +5,7 @@ export function useCelestialMath() {
   const windowRatio = ref(1)
   const timeOffset = ref(20)       // Minutes relative to sunset
   const longOffset = ref(7)        // Degrees between Sun and Moon
-  const latOffset = ref(0.5) // Degrees of vertical offset
+  const latOffset = ref(0.5)       // Degrees of vertical offset
   const celestialTilt = ref(90)    // Degrees (90 = vertical path)
   const zoom = ref(1)
 
@@ -16,7 +16,7 @@ export function useCelestialMath() {
     MOON_RATIO: 1.0,
     DEG_TO_PX: 20,                 // Base scale: 1 degree = 20vh units
     SUN_SPEED: 0.25,               // Earth rotates 0.25 degrees per minute
-    VISIBILITY_LIMIT: 6.2,             // Minimum elongation for moon visibility
+    VISIBILITY_LIMIT: 6.2,         // Minimum elongation for moon visibility
     TWILIGHT_THRESHOLD: -3,        // Sun depth needed for moon to appear
   }
 
@@ -87,7 +87,7 @@ export function useCelestialMath() {
   // --- VISUAL COMPUTATIONS ---
   const moonOpacity = computed(() => {
     // Hide moon if sun is too high OR if moon is too close to sun 
-    if (solarProgress.value > CONFIG.TWILIGHT_THRESHOLD || elongation.value < CONFIG.VISIBILITY_LIMIT_LIMIT) {
+    if (solarProgress.value > CONFIG.TWILIGHT_THRESHOLD || elongation.value < CONFIG.VISIBILITY_LIMIT) {
       return 0
     }
     const fadeFactor = 0.1 / zoom.value
