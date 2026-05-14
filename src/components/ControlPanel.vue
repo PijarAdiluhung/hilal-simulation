@@ -29,7 +29,7 @@ const emit = defineEmits([
     class="fixed z-50 w-72 bg-black/70 backdrop-blur-2xl p-4 pb-6 rounded-2xl border border-white/10 shadow-2xl transition-all duration-300
            top-6 left-1/2 -translate-x-1/2 
            md:top-6 md:right-6 md:left-auto md:translate-x-0
-           h-auto overflow-y-auto"
+           h-auto"
   >
     <!-- Header / Toggle -->
     <div class="flex justify-between items-center -mt-2 mb-3">
@@ -93,7 +93,7 @@ const emit = defineEmits([
     </div>
 
     <!-- Collapsible Section -->
-    <div v-if="!isCollapsed" class="flex flex-col gap-4 mt-6 pt-4 border-t border-white/10">
+    <div v-if="!isCollapsed" class="flex flex-col gap-4 mt-6 pt-4 border-t border-white/10 max-h-39 md:max-h-full overflow-y-auto overscroll-contain pr-2 custom-scrollbar">
       <!-- Ecliptic Longitude Offset -->
       <div class="flex flex-col gap-2">
         <div class="flex justify-between items-center">
@@ -219,3 +219,22 @@ const emit = defineEmits([
     </div>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+</style>
