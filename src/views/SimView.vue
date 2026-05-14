@@ -10,25 +10,54 @@ const CONFIG = {
 }
 
 const solarProgress = ref(5)
-const SUNMOON_GAP = ref(5)
-const AZIMUTH_GAP = ref(4)
+const SUNMOON_GAP = ref(9)
+const AZIMUTH_GAP = ref(0)
+const celestialTilt = ref(90)
+
+// Helper to convert degrees to radians
+const toRad = (deg) => deg * (Math.PI / 180)
 
 const moonRotation = computed(() => {
-  // We calculate the angle between the moon and the sun
+  // 1. Get the geometric angle between Sun and Moon based on your gaps
   const angleRad = Math.atan2(SUNMOON_GAP.value, AZIMUTH_GAP.value)
-
-  // Convert radians to degrees
   const angleDeg = angleRad * (180 / Math.PI)
 
-  return angleDeg
+  // 2. Adjust for the celestial tilt. 
+  // We subtract 90 because when tilt is 90 (vertical), 
+  // the moon's "down" is the sun.
+  const tiltAdjustment = celestialTilt.value - 90
+
+  return angleDeg + tiltAdjustment
 })
 
-// --- POSITIONING LOGIC ---
-// Now vertical (%) and horizontal (vh) use the same CONFIG.VISUAL_SCALE
-const getVerticalPos = (altitude) => CONFIG.HORIZON_Y - altitude * CONFIG.VISUAL_SCALE
+// --- NEW POSITIONING LOGIC ---
+const getPosition = (altitude, azimuthOffset = 0) => {
+  // 1. Center of rotation (The point on the horizon)
+  const centerX = 50 // %
+  const centerY = CONFIG.HORIZON_Y // %
 
-const sunY = computed(() => getVerticalPos(solarProgress.value))
-const moonY = computed(() => getVerticalPos(solarProgress.value + SUNMOON_GAP.value))
+  // 2. Adjust angle so 90° is vertical
+  // In screen space, 0° is usually horizontal right.
+  // We want 90° to be "straight up".
+  const angleRad = toRad(celestialTilt.value - 90)
+
+  // 3. Calculate raw offsets based on your scale
+  const rawX = azimuthOffset * CONFIG.VISUAL_SCALE // vh units
+  const rawY = -altitude * CONFIG.VISUAL_SCALE // % units (negative because up is smaller Y)
+
+  // 4. Apply Rotation Matrix
+  const rotatedX = rawX * Math.cos(angleRad) - rawY * Math.sin(angleRad)
+  const rotatedY = rawX * Math.sin(angleRad) + rawY * Math.cos(angleRad)
+
+  return {
+    left: `calc(${centerX}% + ${rotatedX}vh)`,
+    top: `${centerY + rotatedY}%`,
+  }
+}
+
+const sunPos = computed(() => getPosition(solarProgress.value, 0))
+const moonPos = computed(() => getPosition(lunarAltitude.value, AZIMUTH_GAP.value))
+
 const lunarAltitude = computed(() => solarProgress.value + SUNMOON_GAP.value)
 
 const elongation = computed(() => {
@@ -78,29 +107,29 @@ const nightOpacity = computed(() => {
 })
 
 const syafaqOpacity = computed(() => {
-  const p = solarProgress.value;
-  
+  const p = solarProgress.value
+
   // Syafaq appears as the sun dips below the horizon
-  if (p > 0.5 || p < -15) return 0;
-  
-  let intensity = 0;
-  
+  if (p > 0.5 || p < -15) return 0
+
+  let intensity = 0
+
   // Fade in as sun sets (0 to -3)
   if (p <= 0.5 && p > -3) {
-    intensity = (0.5 - p) / 3.5;
-  } 
+    intensity = (0.5 - p) / 3.5
+  }
   // Peak intensity plateau (-3 to -7)
   else if (p <= -3 && p >= -7) {
-    intensity = 1;
+    intensity = 1
   }
   // Fade out into deep night (-7 to -12)
   else if (p < -7 && p >= -15) {
-    intensity = (15 + p) / 5;
+    intensity = (15 + p) / 5
   }
 
   // Cap at 0.5 for a realistic, subtle haze
-  return intensity * 0.5;
-});
+  return intensity * 0.5
+})
 
 const moonOpacity = computed(() => {
   // 1. Check if the sun is low enough (-3°) and elongation is sufficient (6.4°)
@@ -118,12 +147,12 @@ const moonOpacity = computed(() => {
 // Add this computed property to calculate "Sighting Difficulty"
 const moonFilter = computed(() => {
   // If moon is near horizon (e.g., altitude < 5°) and Syafaq is active
-  const proximityToHorizon = Math.max(0, 5 - lunarAltitude.value);
-  const blurAmount = proximityToHorizon * syafaqOpacity.value * 1.4;
-  const contrastAmount = 100 - (proximityToHorizon * syafaqOpacity.value * 10);
-  
-  return `blur(${blurAmount}px) contrast(${contrastAmount}%)`;
-});
+  const proximityToHorizon = Math.max(0, 5 - lunarAltitude.value)
+  const blurAmount = proximityToHorizon * syafaqOpacity.value * 1.4
+  const contrastAmount = 100 - proximityToHorizon * syafaqOpacity.value * 10
+
+  return `blur(${blurAmount}px) contrast(${contrastAmount}%)`
+})
 
 const groundBrightness = computed(() => {
   // Ground darkens as the sun crosses the -0.25° threshold
@@ -167,7 +196,8 @@ const groundBrightness = computed(() => {
       <div
         class="absolute left-1/2 -translate-x-1/2 rounded-full bg-yellow-50 blur-[1px] shadow-[0_0_60px_20px_rgba(255,252,231,0.5)] transition-all duration-300"
         :style="{
-          top: sunY + '%',
+          left: sunPos.left,
+          top: sunPos.top,
           width: CONFIG.SUN_SIZE + 'px',
           height: CONFIG.SUN_SIZE + 'px',
         }"
@@ -177,7 +207,8 @@ const groundBrightness = computed(() => {
       <div
         class="absolute left-1/2 transition-all duration-300"
         :style="{
-          top: moonY + '%',
+          left: moonPos.left,
+          top: moonPos.top,
           opacity: moonOpacity,
           filter: moonFilter,
           transform: `translateX(calc(-50% + ${AZIMUTH_GAP * -CONFIG.VISUAL_SCALE}vh)) 
@@ -201,35 +232,80 @@ const groundBrightness = computed(() => {
     ></div>
 
     <!-- Control Panel -->
-    <div class="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-72 bg-black/60 backdrop-blur-2xl p-5 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4">
-      
+    <div
+      class="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-72 bg-black/60 backdrop-blur-2xl p-5 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4"
+    >
       <!-- Slider 1: Sun -->
       <div class="flex flex-col gap-2 -mt-1">
         <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Solar Altitude</span>
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
+            >Solar Altitude</span
+          >
           <span class="text-white font-mono text-sm">{{ solarProgress.toFixed(1) }}°</span>
         </div>
-        <input v-model.number="solarProgress" type="range" min="-12" max="10" step="0.1" class="custom-slider" />
+        <input
+          v-model.number="solarProgress"
+          type="range"
+          min="-12"
+          max="10"
+          step="0.1"
+          class="custom-slider"
+        />
       </div>
 
       <!-- Slider 2: Sun-Moon Gap -->
       <div class="flex flex-col gap-2">
         <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Sun-Moon Gap</span>
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
+            >Sun-Moon Gap</span
+          >
           <span class="text-white font-mono text-sm">{{ SUNMOON_GAP.toFixed(1) }}°</span>
         </div>
-        <input v-model.number="SUNMOON_GAP" type="range" min="0" max="9" step="0.1" class="custom-slider" />
+        <input
+          v-model.number="SUNMOON_GAP"
+          type="range"
+          min="0"
+          max="9"
+          step="0.1"
+          class="custom-slider"
+        />
       </div>
 
       <!-- Slider 3: Azimuth -->
       <div class="flex flex-col gap-2">
         <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Azimuth Gap</span>
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
+            >Azimuth Gap</span
+          >
           <span class="text-white font-mono text-sm">{{ AZIMUTH_GAP.toFixed(1) }}°</span>
         </div>
-        <input v-model.number="AZIMUTH_GAP" type="range" min="-5.2" max="5.2" step="0.1" class="custom-slider" />
+        <input
+          v-model.number="AZIMUTH_GAP"
+          type="range"
+          min="-5.2"
+          max="5.2"
+          step="0.1"
+          class="custom-slider"
+        />
       </div>
 
+      <!-- Slider 4: Tilt -->
+      <div class="flex flex-col gap-2">
+        <div class="flex justify-between items-center">
+          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
+            >Ecliptic Tilt</span
+          >
+          <span class="text-white font-mono text-sm">{{ celestialTilt }}°</span>
+        </div>
+        <input
+          v-model.number="celestialTilt"
+          type="range"
+          min="10"
+          max="170"
+          step="1"
+          class="custom-slider"
+        />
+      </div>
     </div>
 
     <!-- Bottom Stats -->
