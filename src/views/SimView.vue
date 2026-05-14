@@ -1,15 +1,35 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+
+const windowRatio = ref(1)
+
+// Update the aspect ratio dynamically
+const updateRatio = () => {
+  windowRatio.value = window.innerWidth / window.innerHeight
+}
+
+onMounted(() => {
+  updateRatio()
+  window.addEventListener('resize', updateRatio)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateRatio)
+})
 
 // --- CONFIGURATION ---
+const isCollapsed = ref(true)
+const showGuidingAids = ref(false)
 const zoom = ref(1) // 1 = Default, 4 = Zoomed out
 
 const CONFIG = {
-  HORIZON_Y: 72, // Percent from top
+  HORIZON_Y: 80, // Percent from top
   MOON_RATIO: 1.0,
 }
 
-const solarProgress = ref(5)
+const timeOffset = ref(20) // Minutes relative to sunset (Positive = After, Negative = Before)
+const solarProgress = computed(() => -(timeOffset.value / 4))
+
 const SUNMOON_GAP = ref(7)
 const LUNAR_INCLINATION = ref(0.5)
 const celestialTilt = ref(90)
@@ -83,8 +103,6 @@ const moonRotation = computed(() => {
   const deltaY = sunRotY - moonRotY
 
   // 3. Calculate the angle (atan2 is perfect for this)
-  // We add 90 because the moon's default "0" rotation
-  // (the crescent belly) is pointing right.
   const angleRad = Math.atan2(deltaY, deltaX)
   const angleDeg = angleRad * (180 / Math.PI)
 
@@ -184,18 +202,65 @@ const moonOpacity = computed(() => {
   const darknessFactor = Math.abs(solarProgress.value + 3) * multiplier
 
   // We cap the opacity at 0.9 for a softer look
-  return Math.min(darknessFactor, 0.9)
+  return Math.min(darknessFactor, 1)
 })
 
 // Add this computed property to calculate "Sighting Difficulty"
 const moonFilter = computed(() => {
   // If moon is near horizon (e.g., altitude < 5°) and Syafaq is active
   const proximityToHorizon = Math.max(0, 5 - lunarAltitude.value)
-  const blurMultiplier = 1.6 / zoom.value
+  const blurMultiplier = 1.6 / (zoom.value * 1.2)
   const blurAmount = proximityToHorizon * syafaqOpacity.value * blurMultiplier
   const contrastAmount = 100 - proximityToHorizon * syafaqOpacity.value * 10
 
   return `blur(${blurAmount}px) contrast(${contrastAmount}%)`
+})
+
+// Determine if the Moon is currently outside the visible screen
+const moonOffScreen = computed(() => {
+  const x = parseFloat(moonPos.value.left) // This is a bit dirty because of 'calc'
+  // Better: Re-calculate raw X/Y for the moon to check boundaries
+  const tiltRad = toRad(celestialTilt.value - 90)
+  const localX = LUNAR_INCLINATION.value * visualScale.value
+  const localY = -(solarProgress.value + SUNMOON_GAP.value) * visualScale.value
+
+  const rotatedX = localX * Math.cos(tiltRad) - localY * Math.sin(tiltRad)
+  const rotatedY = localX * Math.sin(tiltRad) + localY * Math.cos(tiltRad)
+
+  const screenX = 50 + rotatedX * (100 / 100) // Approximation of %
+  const screenY = CONFIG.HORIZON_Y + rotatedY
+
+  return screenY < 0 || screenX < 0 || screenX > 100
+})
+
+const moonBounds = computed(() => {
+  const tiltRad = toRad(celestialTilt.value - 90)
+  const localX = LUNAR_INCLINATION.value * visualScale.value
+  const localY = -(solarProgress.value + SUNMOON_GAP.value) * visualScale.value
+
+  const rotatedX = localX * Math.cos(tiltRad) - localY * Math.sin(tiltRad)
+  const rotatedY = localX * Math.sin(tiltRad) + localY * Math.cos(tiltRad)
+
+  // 1. Convert rotatedX (which is in vh) to a horizontal percentage
+  // Since 100vh = (100 / windowRatio) vw
+  // The center is 50%. The offset in %-width is:
+  const horizontalOffsetPct = rotatedX / windowRatio.value
+  const currentXPos = 50 + horizontalOffsetPct
+
+  // 2. Vertical position is already in % (relative to horizon)
+  const currentYPos = CONFIG.HORIZON_Y + rotatedY
+
+  const groundTop = CONFIG.HORIZON_Y
+
+  return {
+    isTooTop: currentYPos < 0,
+    isTooBottom: currentYPos > groundTop,
+    isTooLeft: currentXPos < 0,
+    isTooRight: currentXPos > 100,
+    y: currentYPos,
+    x: currentXPos,
+    groundTop: groundTop,
+  }
 })
 
 const groundBrightness = computed(() => {
@@ -229,12 +294,12 @@ const groundBrightness = computed(() => {
     <div
       class="absolute inset-0 z-5 transition-opacity duration-700 pointer-events-none"
       :style="{
-        opacity: syafaqOpacity,
+        opacity: syafaqOpacity * 0.6,
         background: `radial-gradient(
-      circle at 50% ${CONFIG.HORIZON_Y}%, 
+      circle at 50% ${CONFIG.HORIZON_Y + 3}%, 
       rgba(255, 160, 60, 0.6) 0%, 
       rgba(255, 80, 0, 0.2) ${40 / zoom}%, 
-      transparent ${60 / zoom}%
+      transparent ${70 / zoom}%
     )`,
       }"
     ></div>
@@ -252,7 +317,6 @@ const groundBrightness = computed(() => {
         }"
       ></div>
 
-      <!-- Moon -->
       <!-- Moon -->
       <div
         class="absolute left-1/2 transition-all duration-300"
@@ -273,110 +337,245 @@ const groundBrightness = computed(() => {
           </svg>
         </div>
       </div>
+      <!-- Tracking Box on Moon -->
+      <div
+        v-if="showGuidingAids"
+        class="absolute border-2 border-amber-400/50 pointer-events-none transition-all duration-300"
+        :style="{
+          left: moonPos.left,
+          top: moonPos.top,
+          width: moonSize + 20 + 'px',
+          height: moonSize + 20 + 'px',
+          transform: 'translate(-50%, -50%)',
+          opacity: moonOffScreen ? 0 : 1,
+        }"
+      >
+        <div class="absolute -top-5 left-0 text-[10px] text-amber-400 font-mono font-bold">
+          HILAL
+        </div>
+      </div>
+
+      <!-- Top Indicator -->
+      <div
+        v-if="showGuidingAids && moonBounds.isTooTop && lunarAltitude > 0"
+        class="absolute top-2 -translate-x-1/2 flex flex-col items-center animate-pulse z-50"
+        :style="{ left: Math.max(5, Math.min(95, moonBounds.x)) + '%' }"
+      >
+        <div
+          class="w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-12 border-b-amber-400"
+        ></div>
+      </div>
+
+      <!-- Bottom Indicator (Stops at Horizon/Ground) -->
+      <div
+        v-if="showGuidingAids && moonBounds.isTooBottom"
+        class="absolute flex flex-col items-center animate-pulse z-50 -translate-x-1/2"
+        :style="{
+          left: Math.max(5, Math.min(95, moonBounds.x)) + '%',
+          top: `calc(${CONFIG.HORIZON_Y}% - 20px)`,
+        }"
+      >
+        <div
+          class="w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-12 border-t-amber-400"
+        ></div>
+      </div>
+
+      <!-- 3. Left Indicator (Tracks Y - Capped above horizon) -->
+      <div
+        v-if="showGuidingAids && moonBounds.isTooLeft"
+        class="absolute left-4 -translate-y-1/2 flex items-center animate-pulse z-50"
+        :style="{
+          /* Min 5% from top, Max (Horizon - 4%) to avoid the bottom indicator */
+          top: Math.max(5, Math.min(CONFIG.HORIZON_Y - 5, moonBounds.y)) + '%',
+        }"
+      >
+        <div
+          class="w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-12 border-r-amber-400"
+        ></div>
+      </div>
+
+      <!-- 4. Right Indicator (Tracks Y - Capped above horizon) -->
+      <div
+        v-if="showGuidingAids && moonBounds.isTooRight"
+        class="absolute right-4 -translate-y-1/2 flex items-center animate-pulse z-50"
+        :style="{
+          /* Min 5% from top, Max (Horizon - 4%) to avoid the bottom indicator */
+          top: Math.max(5, Math.min(CONFIG.HORIZON_Y - 5, moonBounds.y)) + '%',
+        }"
+      >
+        <div
+          class="w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-12 border-l-amber-400"
+        ></div>
+      </div>
     </div>
 
     <!-- Ground -->
     <div
-      class="absolute bottom-0 w-full h-[25vh] bg-neutral-900 z-10 border-t border-white/5"
-      :style="{ filter: groundBrightness }"
+      class="absolute bottom-0 w-full z-10 border-t border-white/5 bg-neutral-900"
+      :style="{
+        top: CONFIG.HORIZON_Y + '%',
+        filter: groundBrightness,
+      }"
     ></div>
 
-    <!-- Control Panel -->
+    <!-- Collapsible Control Panel -->
     <div
-      class="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-72 bg-black/60 backdrop-blur-2xl p-5 rounded-3xl border border-white/10 shadow-2xl flex flex-col gap-4"
+      class="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-72 bg-black/70 backdrop-blur-2xl p-4 rounded-2xl border border-white/10 shadow-2xl transition-all duration-300 ease-in-out"
     >
-      <!-- Slider 1: Sun -->
-      <div class="flex flex-col gap-2 -mt-1">
-        <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
-            >Solar Altitude</span
+      <!-- Header / Toggle -->
+      <div class="flex justify-between items-center -mt-2 mb-3">
+        <span class="text-[10px] text-white/60 font-black tracking-[0.2em] uppercase"
+          >Sim Controls</span
+        >
+        <button
+          @click="isCollapsed = !isCollapsed"
+          class="text-white/40 hover:text-white transition-colors p-1"
+        >
+          <svg
+            v-if="isCollapsed"
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           >
-          <span class="text-white font-mono text-sm">{{ solarProgress.toFixed(1) }}°</span>
-        </div>
-        <input
-          v-model.number="solarProgress"
-          type="range"
-          min="-12"
-          max="10"
-          step="0.1"
-          class="custom-slider"
-        />
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+          <svg
+            v-else
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m18 15-6-6-6 6" />
+          </svg>
+        </button>
       </div>
 
-      <!-- Slider 2: Sun-Moon Gap -->
-      <div class="flex flex-col gap-2">
-        <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
-            >Sun-Moon Gap</span
-          >
-          <span class="text-white font-mono text-sm">{{ SUNMOON_GAP.toFixed(1) }}°</span>
+      <!-- Always Visible: Solar Altitude -->
+      <div class="flex flex-col gap-3">
+        <div class="flex justify-between items-end">
+          <span class="text-xs text-white/80 font-medium">
+            {{ timeOffset <= 0 ? 'Before Sunset' : 'After Sunset' }}
+          </span>
+          <span class="text-white font-mono text-sm leading-none">
+            {{ timeOffset === 0 ? 'Sunset' : Math.abs(timeOffset) + 'm' }}
+          </span>
         </div>
         <input
-          v-model.number="SUNMOON_GAP"
+          v-model.number="timeOffset"
           type="range"
-          min="0"
-          max="9"
-          step="0.1"
-          class="custom-slider"
-        />
-      </div>
-
-      <!-- Slider 3: Inclination -->
-      <div class="flex flex-col gap-2">
-        <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
-            >Lunar Inclination</span
-          >
-          <span class="text-white font-mono text-sm">{{ LUNAR_INCLINATION.toFixed(1) }}°</span>
-        </div>
-        <input
-          v-model.number="LUNAR_INCLINATION"
-          type="range"
-          min="-5.2"
-          max="5.2"
-          step="0.1"
-          class="custom-slider"
-        />
-      </div>
-
-      <!-- Slider 4: Tilt -->
-      <div class="flex flex-col gap-2">
-        <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase"
-            >Ecliptic Tilt</span
-          >
-          <span class="text-white font-mono text-sm">{{ celestialTilt }}°</span>
-        </div>
-        <input
-          v-model.number="celestialTilt"
-          type="range"
-          min="10"
-          max="170"
+          min="-20"
+          max="60"
           step="1"
           class="custom-slider"
         />
       </div>
 
-      <!-- Slider 5: Zoom -->
-      <div class="flex flex-col gap-2 pt-2 border-t border-white/10">
-        <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold tracking-widest uppercase">Zoom</span>
-          <span class="text-white font-mono text-sm">{{ (1/zoom).toFixed(2) }}x</span>
+      <!-- Collapsible Section -->
+      <div
+        v-if="!isCollapsed"
+        class="flex flex-col gap-4 mt-4 pt-4 border-t border-white/10 overflow-hidden"
+      >
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest"
+              >Sun-Moon Gap</span
+            >
+            <span class="text-white font-mono text-xs">{{ SUNMOON_GAP.toFixed(1) }}°</span>
+          </div>
+          <input
+            v-model.number="SUNMOON_GAP"
+            type="range"
+            min="0"
+            max="12"
+            step="0.1"
+            class="custom-slider"
+          />
         </div>
-        <input
-          v-model.number="zoom"
-          type="range"
-          min="1"
-          max="4"
-          step="0.1"
-          class="custom-slider"
-        />
+
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest"
+              >Lunar Inclination</span
+            >
+            <span class="text-white font-mono text-xs">{{ LUNAR_INCLINATION.toFixed(1) }}°</span>
+          </div>
+          <input
+            v-model.number="LUNAR_INCLINATION"
+            type="range"
+            min="-5.2"
+            max="5.2"
+            step="0.1"
+            class="custom-slider"
+          />
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest"
+              >Ecliptic Tilt</span
+            >
+            <span class="text-white font-mono text-xs">{{ celestialTilt }}°</span>
+          </div>
+          <input
+            v-model.number="celestialTilt"
+            type="range"
+            min="15"
+            max="165"
+            step="1"
+            class="custom-slider"
+          />
+        </div>
+
+        <div class="flex flex-col gap-2 pt-2 border-t border-white/15">
+          <div class="flex justify-between items-center">
+            <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest"
+              >Zoom Level</span
+            >
+            <span class="text-white font-mono text-xs">{{ (1 / zoom).toFixed(2) }}x</span>
+          </div>
+          <input
+            v-model.number="zoom"
+            type="range"
+            min="1"
+            max="4"
+            step="0.1"
+            class="custom-slider"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest"
+            >Guiding Aids</span
+          >
+          <button
+            @click="showGuidingAids = !showGuidingAids"
+            :class="showGuidingAids ? 'bg-amber-500' : 'bg-white/10'"
+            class="w-8 h-4 rounded-full relative transition-colors duration-200"
+          >
+            <div
+              :class="showGuidingAids ? 'translate-x-4' : 'translate-x-0'"
+              class="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform"
+            ></div>
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Bottom Stats -->
     <div
-      class="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex gap-8 px-8 py-4 bg-black/30 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl"
+      class="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex gap-8 px-8 py-4 bg-black/30 backdrop-blur-md rounded-2xl border border-white/5 shadow-2xl"
     >
       <div class="flex flex-col items-center">
         <span
