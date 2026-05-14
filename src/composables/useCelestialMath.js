@@ -3,21 +3,21 @@ import { ref, computed } from 'vue'
 export function useCelestialMath() {
   // --- STATE ---
   const windowRatio = ref(1)
-  const timeOffset = ref(20)       // Minutes relative to sunset
-  const longOffset = ref(7)        // Degrees between Sun and Moon
-  const latOffset = ref(0.5)       // Degrees of vertical offset
-  const celestialTilt = ref(90)    // Degrees (90 = vertical path)
+  const timeOffset = ref(20) // Minutes relative to sunset
+  const longOffset = ref(7) // Degrees between Sun and Moon
+  const latOffset = ref(0.5) // Degrees of vertical offset
+  const celestialTilt = ref(90) // Degrees (90 = vertical path)
   const zoom = ref(1)
 
   // --- CONSTANTS ---
   // Keeping names identical to your original code to prevent UI breakage
   const CONFIG = {
-    HORIZON_Y: 80,                 // Percent from top of screen
+    HORIZON_Y: 80, // Percent from top of screen
     MOON_RATIO: 1.0,
-    DEG_TO_PX: 20,                 // Base scale: 1 degree = 20vh units
-    SUN_SPEED: 0.25,               // Earth rotates 0.25 degrees per minute
-    VISIBILITY_LIMIT: 6.2,         // Minimum elongation for moon visibility
-    TWILIGHT_THRESHOLD: -3,        // Sun depth needed for moon to appear
+    DEG_TO_PX: 20, // Base scale: 1 degree = 20vh units
+    SUN_SPEED: 0.25, // Earth rotates 0.25 degrees per minute
+    VISIBILITY_LIMIT: 6.3, // Minimum elongation for moon visibility
+    TWILIGHT_THRESHOLD: -2.9, // Sun depth needed for moon to appear
   }
 
   // --- HELPER MATH ---
@@ -39,8 +39,8 @@ export function useCelestialMath() {
    * Core positioning engine using a 2D Rotation Matrix
    */
   const getPosition = (altitude, latitudeOffset = 0) => {
-    const centerX = 50 
-    const centerY = CONFIG.HORIZON_Y 
+    const centerX = 50
+    const centerY = CONFIG.HORIZON_Y
 
     // Shift by 90 so that a tilt of 90° results in a vertical movement
     const tiltRad = toRad(celestialTilt.value - 90)
@@ -86,8 +86,11 @@ export function useCelestialMath() {
 
   // --- VISUAL COMPUTATIONS ---
   const moonOpacity = computed(() => {
-    // Hide moon if sun is too high OR if moon is too close to sun 
-    if (solarProgress.value > CONFIG.TWILIGHT_THRESHOLD || elongation.value < CONFIG.VISIBILITY_LIMIT) {
+    // Hide moon if sun is too high OR if moon is too close to sun
+    if (
+      solarProgress.value > CONFIG.TWILIGHT_THRESHOLD ||
+      elongation.value < CONFIG.VISIBILITY_LIMIT
+    ) {
       return 0
     }
     const fadeFactor = 0.1 / zoom.value
@@ -98,7 +101,7 @@ export function useCelestialMath() {
   const moonFilter = computed(() => {
     const proximityToHorizon = Math.max(0, 5 - lunarAltitude.value)
     const blurAmount = proximityToHorizon * (0.5 / zoom.value)
-    const contrastValue = 100 - (proximityToHorizon * 5)
+    const contrastValue = 100 - proximityToHorizon * 5
     return `blur(${blurAmount}px) contrast(${contrastValue}%)`
   })
 
@@ -115,6 +118,20 @@ export function useCelestialMath() {
       x: currentXPos,
       y: currentYPos,
     }
+  })
+
+  const spaceOpacity = computed(() => {
+    const e = elongation.value
+    if (e < 6) return 0
+
+    if (e <= 12) {
+      // Normalizes 6-12 range to a 0.0 - 1.0 value
+      const t = (e - 6) / (12 - 6)
+      // Linear interpolation: start + t * (end - start)
+      return 0.1 + t * (0.8 - 0.1)
+    }
+
+    return 0.8
   })
 
   const groundBrightness = computed(() => {
@@ -138,6 +155,7 @@ export function useCelestialMath() {
     moonRotation,
     moonOpacity,
     moonFilter,
+    spaceOpacity,
     moonBounds,
     lunarAltitude,
     elongation,

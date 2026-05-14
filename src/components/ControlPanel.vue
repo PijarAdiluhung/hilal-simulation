@@ -8,6 +8,7 @@ defineProps({
   zoom: Number,
   showAids: Boolean,
   showPlanes: Boolean,
+  showAtmosphere: Boolean,
 })
 
 const emit = defineEmits([
@@ -19,12 +20,16 @@ const emit = defineEmits([
   'update:zoom',
   'update:showAids',
   'update:showPlanes',
+  'update:showAtmosphere',
 ])
 </script>
 
 <template>
   <div
-    class="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-72 bg-black/70 backdrop-blur-2xl p-4 rounded-2xl border border-white/10 shadow-2xl transition-all duration-300"
+    class="fixed z-50 w-72 bg-black/70 backdrop-blur-2xl p-4 pb-6 rounded-2xl border border-white/10 shadow-2xl transition-all duration-300
+           top-6 left-1/2 -translate-x-1/2 
+           md:top-6 md:right-6 md:left-auto md:translate-x-0
+           h-auto overflow-y-auto"
   >
     <!-- Header / Toggle -->
     <div class="flex justify-between items-center -mt-2 mb-3">
@@ -80,7 +85,7 @@ const emit = defineEmits([
         :value="timeOffset"
         @input="emit('update:timeOffset', Number($event.target.value))"
         type="range"
-        min="-20"
+        min="-40"
         max="60"
         step="1"
         class="custom-slider"
@@ -149,8 +154,8 @@ const emit = defineEmits([
       <!-- Zoom Level -->
       <div class="flex flex-col gap-2">
         <div class="flex justify-between items-center">
-          <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest">Zoom</span>
-          <span class="text-white font-mono text-xs">{{ (1 / zoom).toFixed(2) }}x</span>
+          <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest">Field of View</span>
+          <span class="text-white font-mono text-xs">{{ (zoom).toFixed(2) }}</span>
         </div>
         <input
           :value="zoom"
@@ -192,6 +197,21 @@ const emit = defineEmits([
         >
           <div
             :class="showPlanes ? 'translate-x-4' : 'translate-x-0'"
+            class="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform"
+          ></div>
+        </button>
+      </div>
+
+      <!-- Atmosphere Toggle -->
+      <div class="flex items-center justify-between">
+        <span class="text-[9px] text-white/40 font-bold uppercase tracking-widest">Atmosphere</span>
+        <button
+          @click="emit('update:showAtmosphere', !showAtmosphere)"
+          :class="showAtmosphere ? 'bg-indigo-500' : 'bg-white/10'"
+          class="w-8 h-4 rounded-full relative transition-colors duration-200"
+        >
+          <div
+            :class="showAtmosphere ? 'translate-x-4' : 'translate-x-0'"
             class="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform"
           ></div>
         </button>

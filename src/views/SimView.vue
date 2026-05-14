@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useCelestialMath } from '../composables/useCelestialMath'
 
-// Components 
+// Components
 import SkyBackground from '../components/SkyBackground.vue'
 import CelestialBody from '../components/CelestialBody.vue'
 import GuidingAids from '../components/GuidingAids.vue'
@@ -24,6 +24,7 @@ const {
   moonRotation,
   moonOpacity,
   moonFilter,
+  spaceOpacity,
   solarProgress,
   moonBounds,
   lunarAltitude,
@@ -36,6 +37,7 @@ const {
 const isCollapsed = ref(true)
 const showGuidingAids = ref(false)
 const showPlanes = ref(false)
+const showAtmosphere = ref(true)
 
 // Handle window resizing for the coordinate system
 onMounted(() => {
@@ -53,7 +55,12 @@ onUnmounted(() => {
     class="relative w-full h-screen overflow-hidden flex flex-col font-sans select-none bg-black"
   >
     <!-- 1. The Sky Layers (Atmosphere) -->
-    <SkyBackground :progress="solarProgress" :zoom="zoom" :horizon-y="CONFIG.HORIZON_Y" />
+    <SkyBackground
+      v-if="showAtmosphere"
+      :progress="solarProgress"
+      :zoom="zoom"
+      :horizon-y="CONFIG.HORIZON_Y"
+    />
 
     <!-- 2. The Celestial Layer -->
     <div class="absolute inset-0 z-10 pointer-events-none">
@@ -66,8 +73,8 @@ onUnmounted(() => {
         :pos="moonPos"
         :size="50 / zoom"
         :rotation="moonRotation"
-        :opacity="moonOpacity"
-        :filter="moonFilter"
+        :opacity="showAtmosphere ? moonOpacity : spaceOpacity"
+        :filter="showAtmosphere ? moonFilter : 'none'"
       />
 
       <!-- Directional Helpers -->
@@ -88,6 +95,10 @@ onUnmounted(() => {
         :tilt="celestialTilt"
         :horizon-y="CONFIG.HORIZON_Y"
         :zoom="zoom"
+        :long-offset="longOffset"
+        :lat-offset="latOffset"
+        :elongation="elongation"
+        :visual-scale="CONFIG.DEG_TO_PX / zoom"
       />
     </div>
 
@@ -110,6 +121,7 @@ onUnmounted(() => {
       v-model:zoom="zoom"
       v-model:show-aids="showGuidingAids"
       v-model:show-planes="showPlanes"
+      v-model:show-atmosphere="showAtmosphere"
     />
 
     <!-- 5. Bottom Data Readout -->
