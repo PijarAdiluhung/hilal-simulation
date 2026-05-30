@@ -1,38 +1,87 @@
-# hilal-simulation
+# 🌙 Hilal Simulator — Crescent Moon Visibility Tool
 
-This template should help get you started developing with Vue 3 in Vite.
+[![Live Demo](https://img.shields.io/badge/demo-live-2ea44f?style=for-the-badge)](https://hilal-sim.web.app/)
 
-## Recommended IDE Setup
+An interactive **hilal (crescent moon) visibility simulator** built with Vue 3. Visualize the sun and moon positions relative to an observer's horizon in real-time, compute key parameters for crescent sighting, and explore the celestial mechanics behind the lunar cycle.
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+---
 
-## Recommended Browser Setup
+## ✨ Features
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+- **Real-time celestial simulation** — Sun and moon positions update dynamically based on date, time, and observer location
+- **Key sighting parameters** — Elongation (angular separation), lunar altitude at sunset, ecliptic offsets, and sky brightness
+- **Interactive controls** — Adjust date/time, latitude, longitude, timezone, and zoom level
+- **Visual guides** — Ecliptic reference line, elongation arc, altitude markers, and off-screen moon indicators
+- **Dynamic sky rendering** — Transitions through day, sunset, twilight (syafaq), and night based on sun depression
+- **Responsive design** — Works on desktop and mobile
 
-## Customize configuration
+---
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+## 🛠 Tech Stack
 
-## Project Setup
+| Tech | Purpose |
+|---|---|
+| **Vue 3** (Composition API) | UI framework |
+| **Vite** | Build tool & dev server |
+| **Vue Router** | Client-side routing |
+| **Pinia** | State management |
+| **Tailwind CSS v4** | Styling |
+| **Firebase Hosting** | Deployment & analytics |
+
+---
+
+## 🚀 Live Demo
+
+[**hilal-sim.web.app**](https://hilal-sim.web.app/)
+
+---
+
+## 📦 Getting Started
 
 ```sh
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### Development
 
 ```sh
 npm run dev
 ```
 
-### Compile and Minify for Production
+### Production Build
 
 ```sh
 npm run build
+npm run preview   # Preview the build locally
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── components/        # Vue components
+│   ├── CelestialBody.vue     # Sun/Moon SVG rendering
+│   ├── ControlPanel.vue      # Simulation controls
+│   ├── GuidingAids.vue       # Off-screen moon indicators
+│   ├── ReferenceLines.vue    # Ecliptic & coordinate lines
+│   ├── SkyBackground.vue     # Atmospheric sky layers
+│   └── StatsOverlay.vue      # Altitude/elongation readout
+├── composables/
+│   └── useCelestialMath.js   # Core celestial calculation engine
+├── router/                   # Vue Router configuration
+├── stores/                   # Pinia state stores
+├── views/                    # Page-level views
+│   ├── SimView.vue           # Main simulation view
+│   └── OldView.vue           # Legacy view
+├── App.vue                   # Root component
+├── main.js                   # App entry point
+└── main.css                  # Global styles (Tailwind)
+```
+
+---
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
