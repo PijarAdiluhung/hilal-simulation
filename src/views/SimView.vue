@@ -2,7 +2,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useCelestialMath } from '../composables/useCelestialMath'
 
-// Components
 import SkyBackground from '../components/SkyBackground.vue'
 import CelestialBody from '../components/CelestialBody.vue'
 import GuidingAids from '../components/GuidingAids.vue'
@@ -10,7 +9,6 @@ import ReferenceLines from '../components/ReferenceLines.vue'
 import ControlPanel from '../components/ControlPanel.vue'
 import StatsOverlay from '../components/StatsOverlay.vue'
 
-// Initialize our logic engine
 const {
   timeOffset,
   longOffset,
@@ -18,7 +16,6 @@ const {
   celestialTilt,
   zoom,
   CONFIG,
-  // Computed values from the math engine
   sunPos,
   moonPos,
   moonRotation,
@@ -39,7 +36,6 @@ const showGuidingAids = ref(false)
 const showPlanes = ref(false)
 const showAtmosphere = ref(true)
 
-// Handle window resizing for the coordinate system
 onMounted(() => {
   window.addEventListener('resize', updateWindowRatio)
   updateWindowRatio()
@@ -130,7 +126,6 @@ onUnmounted(() => {
 </template>
 
 <style>
-/* Global slider styles for the app */
 .custom-slider {
   appearance: none;
   width: 100%;

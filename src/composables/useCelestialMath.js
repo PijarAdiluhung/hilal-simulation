@@ -10,7 +10,6 @@ export function useCelestialMath() {
   const zoom = ref(1)
 
   // --- CONSTANTS ---
-  // Keeping names identical to your original code to prevent UI breakage
   const CONFIG = {
     HORIZON_Y: 80, // Percent from top of screen
     MOON_RATIO: 1.0,
@@ -140,7 +139,6 @@ export function useCelestialMath() {
     return `brightness(${Math.max(brightness, 15)}%)`
   })
 
-  // Return the exact same keys as the original script
   return {
     timeOffset,
     longOffset,

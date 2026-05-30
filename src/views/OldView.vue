@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const windowRatio = ref(1)
 
-// Update the aspect ratio dynamically
 const updateRatio = () => {
   windowRatio.value = window.innerWidth / window.innerHeight
 }
@@ -38,7 +37,6 @@ const visualScale = computed(() => 20 / zoom.value) // 1 degree = 20 units (vh/%
 const sunSize = computed(() => 50 / zoom.value) // px
 const moonSize = computed(() => sunSize.value * CONFIG.MOON_RATIO)
 
-// Helper to convert degrees to radians
 const toRad = (deg) => deg * (Math.PI / 180)
 
 // --- NEW POSITIONING LOGIC ---
@@ -608,7 +606,6 @@ const groundBrightness = computed(() => {
 </template>
 
 <style>
-/* Remove standard slider thumb styling for Tailwind accent */
 input[type='range']::-webkit-slider-thumb {
   appearance: none;
   width: 16px;

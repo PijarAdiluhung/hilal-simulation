@@ -1,7 +1,5 @@
 <template>
-  <header>
-    <!-- Your navigation or header stuff can go here -->
-  </header>
+  <header></header>
 
   <RouterView />
 </template>

@@ -2,12 +2,12 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  sunPos: Object, // Should contain { left, top, rawX, rawY }
-  moonPos: Object, // Should contain { left, top, rawX, rawY }
+  sunPos: Object,
+  moonPos: Object,
   horizonY: Number,
   tilt: Number,
   zoom: Number,
-  visualScale: Number, // Pass CONFIG.DEG_TO_PX / zoom here
+  visualScale: Number,
   longOffset: Number,
   latOffset: Number,
   elongation: Number,

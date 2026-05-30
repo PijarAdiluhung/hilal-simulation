@@ -41,14 +41,12 @@ const bodyStyle = computed(() => ({
 </script>
 
 <template>
-  <!-- Sun Rendering -->
   <div
     v-if="type === 'sun'"
     class="absolute rounded-full bg-yellow-50 blur-[1px] shadow-[0_0_60px_20px_rgba(255,252,231,0.5)] transition-all duration-300"
     :style="bodyStyle"
   ></div>
 
-  <!-- Moon Rendering -->
   <div
     v-else-if="type === 'moon'"
     class="absolute transition-all duration-300"
@@ -56,7 +54,6 @@ const bodyStyle = computed(() => ({
   >
     <div class="relative w-full h-full">
       <svg viewBox="0 0 80 80" class="fill-white/90 w-full h-full">
-        <!-- The Hilal (Crescent) Path -->
         <path d="M 40,0 A 40,40 0 1,1 40,80 A 32,37 0 1,0 40,0 Z" />
       </svg>
     </div>

@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import OldView from '../views/OldView.vue' // Import your view
+import OldView from '../views/OldView.vue'
 import SimView from '../views/SimView.vue'
 
 const router = createRouter({
@@ -8,7 +8,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: SimView, // This sets SimView as the default / page
+      component: SimView,
     },
     {
       path: '/alt',

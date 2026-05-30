@@ -1,5 +1,4 @@
 <script setup>
-// This component ONLY cares about the numeric stats
 defineProps({
   altitude: { type: Number, required: true },
   elongation: { type: Number, required: true }
