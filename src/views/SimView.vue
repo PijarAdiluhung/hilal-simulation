@@ -48,7 +48,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="relative w-full h-screen overflow-hidden flex flex-col font-sans select-none bg-black"
+    class="relative w-full h-full overflow-hidden flex flex-col font-sans select-none bg-black"
   >
     <!-- 1. The Sky Layers (Atmosphere) -->
     <SkyBackground

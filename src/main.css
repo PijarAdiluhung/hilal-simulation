@@ -1,1 +1,18 @@
 @import 'tailwindcss';
+
+/* Lock down the root HTML and Body structures */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100svh; /* Stays fixed even when mobile address bars toggle */
+  max-height: 100svh;
+  overflow: hidden; /* Prevents the bounce and scroll layout shifts */
+  position: fixed; /* Extra layer of defense for iOS Safari bounce elastic behavior */
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
