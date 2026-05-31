@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import { useCelestialMath } from '../composables/useCelestialMath'
 
 import SkyBackground from '../components/SkyBackground.vue'
@@ -15,6 +15,7 @@ const {
   latOffset,
   celestialTilt,
   zoom,
+  cssVh,
   CONFIG,
   sunPos,
   moonPos,
@@ -28,22 +29,12 @@ const {
   altitudeAtSunset,
   elongation,
   groundBrightness,
-  updateWindowRatio,
 } = useCelestialMath()
 
 const isCollapsed = ref(true)
 const showGuidingAids = ref(false)
 const showPlanes = ref(false)
 const showAtmosphere = ref(true)
-
-onMounted(() => {
-  window.addEventListener('resize', updateWindowRatio)
-  updateWindowRatio()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateWindowRatio)
-})
 </script>
 
 <template>
@@ -90,7 +81,7 @@ onUnmounted(() => {
         :moon-pos="moonPos"
         :tilt="celestialTilt"
         :horizon-y="CONFIG.HORIZON_Y"
-        :zoom="zoom"
+        :css-vh="cssVh"
         :long-offset="longOffset"
         :lat-offset="latOffset"
         :elongation="elongation"

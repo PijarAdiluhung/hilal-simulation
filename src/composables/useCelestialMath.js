@@ -1,8 +1,9 @@
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 export function useCelestialMath() {
   // --- STATE ---
   const windowRatio = ref(1)
+  const cssVh = ref(0) // Will be set on mount to match CSS 1vh
   const timeOffset = ref(20) // Minutes relative to sunset
   const longOffset = ref(7) // Degrees between Sun and Moon
   const latOffset = ref(0.5) // Degrees of vertical offset
@@ -23,9 +24,42 @@ export function useCelestialMath() {
   const toRad = (deg) => deg * (Math.PI / 180)
   const toDeg = (rad) => rad * (180 / Math.PI)
 
+  // Persistent hidden element to measure CSS vh
+  const vhMeasureEl = ref(null)
+
+  const measureCSSVh = () => {
+    if (!vhMeasureEl.value) return
+    cssVh.value = vhMeasureEl.value.offsetHeight / 100
+  }
+
   const updateWindowRatio = () => {
     windowRatio.value = window.innerWidth / window.innerHeight
+    measureCSSVh()
   }
+
+  onMounted(() => {
+    const el = document.createElement('div')
+    el.style.cssText =
+      'position:fixed;top:0;left:0;width:1px;height:100vh;pointer-events:none;visibility:hidden;z-index:-9999'
+    document.body.appendChild(el)
+    vhMeasureEl.value = el
+    measureCSSVh()
+
+    window.addEventListener('resize', updateWindowRatio)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateWindowRatio)
+    }
+  })
+
+  onUnmounted(() => {
+    window.removeEventListener('resize', updateWindowRatio)
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', updateWindowRatio)
+    }
+    if (vhMeasureEl.value && vhMeasureEl.value.parentNode) {
+      vhMeasureEl.value.parentNode.removeChild(vhMeasureEl.value)
+    }
+  })
 
   // --- COMPUTED LOGIC ---
 
@@ -146,6 +180,7 @@ export function useCelestialMath() {
     celestialTilt,
     zoom,
     windowRatio,
+    cssVh,
     CONFIG,
     solarProgress,
     sunPos,

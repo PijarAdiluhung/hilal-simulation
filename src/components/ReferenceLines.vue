@@ -6,7 +6,7 @@ const props = defineProps({
   moonPos: Object,
   horizonY: Number,
   tilt: Number,
-  zoom: Number,
+  cssVh: Number,
   visualScale: Number,
   longOffset: Number,
   latOffset: Number,
@@ -15,151 +15,81 @@ const props = defineProps({
 
 const toRad = (deg) => deg * (Math.PI / 180)
 
-// 1. Calculate the Ecliptic Line using raw offsets
-const eclipticLine = computed(() => {
-  // Use the same tilt logic as getPosition: (tilt - 90)
-  const angle = toRad(props.tilt)
-  const length = 500 // Large enough to span screen
-
-  return {
-    // We start from the sun's position and move along the tilt angle
-    x1: `calc(${props.sunPos.left} - ${Math.cos(angle) * length}vh)`,
-    y1: `calc(${props.sunPos.top} - ${Math.sin(angle) * length}vh)`,
-    x2: `calc(${props.sunPos.left} + ${Math.cos(angle) * length}vh)`,
-    y2: `calc(${props.sunPos.top} + ${Math.sin(angle) * length}vh)`,
-  }
-})
-
-// 2. The Projection (The "Ghost" point on the ecliptic)
-const projectedPoint = computed(() => {
-  const angle = toRad(props.tilt - 90)
-
-  // Use rawX/rawY which are already unitless numbers relative to the center
-  const dx = props.moonPos.rawX - props.sunPos.rawX
-  const dy = props.moonPos.rawY - props.sunPos.rawY
-
-  // Vector Projection: Dot product of (Moon-Sun) and (Ecliptic Unit Vector)
-  const mag = dx * Math.cos(angle) + dy * Math.sin(angle)
-
-  // Calculate the projected point relative to the Sun
-  const projRawX = props.sunPos.rawX + Math.cos(angle) * mag
-  const projRawY = props.sunPos.rawY + Math.sin(angle) * mag
-
-  return {
-    // Convert back to the UI coordinate system
-    x: `calc(50% + ${projRawX}vh)`,
-    y: `${props.horizonY + projRawY}%`,
-  }
-})
-
-// A centralized utility that handles screen dimension and midpoint math
-const getDimensions = () => {
-  const vh = window.innerHeight / 100
+// Convert raw coordinates to screen pixels using CSS-matched vh
+const toPixels = (rawX, rawY) => {
+  const vh = props.cssVh || window.innerHeight / 100
   const centerX = window.innerWidth / 2
-  const centerY = (props.horizonY / 100) * window.innerHeight
-  return { vh, centerX, centerY }
-}
-
-// 1. Convert any Raw X/Y coordinate object to absolute screen Pixels
-const getPixelCoords = (rawX, rawY) => {
-  const { vh, centerX, centerY } = getDimensions()
+  const centerY = (props.horizonY / 100) * vh * 100
   return {
     x: centerX + rawX * vh,
     y: centerY + rawY * vh,
   }
 }
 
-// 2. Compute the exact pixel spots for your Sun and Moon
+// Sun and Moon pixel positions
 const sunPixels = computed(() => {
   if (!props.sunPos) return { x: 0, y: 0 }
-  return getPixelCoords(props.sunPos.rawX, props.sunPos.rawY)
+  return toPixels(props.sunPos.rawX, props.sunPos.rawY)
 })
 
 const moonPixels = computed(() => {
   if (!props.moonPos) return { x: 0, y: 0 }
-  return getPixelCoords(props.moonPos.rawX, props.moonPos.rawY)
+  return toPixels(props.moonPos.rawX, props.moonPos.rawY)
 })
 
-// 3. Ecliptic Line Pixels
+// Ecliptic line through the Sun
 const eclipticLinePixels = computed(() => {
-  const { vh } = getDimensions()
   const angle = toRad(props.tilt)
-  const length = 500 // Spans safely past edge boundaries
-
+  const len = 500
+  const vh = props.cssVh || window.innerHeight / 100
   const sun = sunPixels.value
-
   return {
-    x1: sun.x - Math.cos(angle) * length * vh,
-    y1: sun.y - Math.sin(angle) * length * vh,
-    x2: sun.x + Math.cos(angle) * length * vh,
-    y2: sun.y + Math.sin(angle) * length * vh,
+    x1: sun.x - Math.cos(angle) * len * vh,
+    y1: sun.y - Math.sin(angle) * len * vh,
+    x2: sun.x + Math.cos(angle) * len * vh,
+    y2: sun.y + Math.sin(angle) * len * vh,
   }
 })
 
-// 4. Projected Point Pixels (The Ghost Point)
+// Projected point: foot of perpendicular from Moon onto ecliptic through Sun
 const projectedPointPixels = computed(() => {
   if (!props.sunPos || !props.moonPos) return { x: 0, y: 0 }
 
   const angle = toRad(props.tilt - 90)
   const dx = props.moonPos.rawX - props.sunPos.rawX
   const dy = props.moonPos.rawY - props.sunPos.rawY
-
   const mag = dx * Math.cos(angle) + dy * Math.sin(angle)
 
-  const projRawX = props.sunPos.rawX + Math.cos(angle) * mag
-  const projRawY = props.sunPos.rawY + Math.sin(angle) * mag
-
-  return getPixelCoords(projRawX, projRawY)
+  return toPixels(
+    props.sunPos.rawX + Math.cos(angle) * mag,
+    props.sunPos.rawY + Math.sin(angle) * mag,
+  )
 })
 
+// Foot of perpendicular from Moon onto ecliptic through origin (raw coords)
 const projectedRaw = computed(() => {
   if (!props.moonPos) return { x: 0, y: 0 }
   const angle = toRad(props.tilt - 90)
-  // Vector projection of Moon onto the Ecliptic line
-  const dotProduct = props.moonPos.rawX * Math.cos(angle) + props.moonPos.rawY * Math.sin(angle)
+  const dot = props.moonPos.rawX * Math.cos(angle) + props.moonPos.rawY * Math.sin(angle)
   return {
-    x: Math.cos(angle) * dotProduct,
-    y: Math.sin(angle) * dotProduct,
+    x: Math.cos(angle) * dot,
+    y: Math.sin(angle) * dot,
   }
 })
 
-// Calculate pixel coordinates for labels
+// Label pixel positions
 const labels = computed(() => {
-  const vh = window.innerHeight / 100
-  const centerX = window.innerWidth / 2
-  const centerY = (props.horizonY / 100) * window.innerHeight
-
-  const getPx = (rawX, rawY) => ({
-    x: centerX + rawX * vh,
-    y: centerY + rawY * vh,
-  })
+  const longMidX = (projectedRaw.value.x + props.moonPos.rawX) / 2
+  const longMidY = (projectedRaw.value.y + props.moonPos.rawY) / 2
+  const latMidX = (props.sunPos.rawX + projectedRaw.value.x) / 2
+  const latMidY = (props.sunPos.rawY + projectedRaw.value.y) / 2
+  const elongMidX = (props.sunPos.rawX + props.moonPos.rawX) / 2
+  const elongMidY = (props.sunPos.rawY + props.moonPos.rawY) / 2
 
   return {
-    // BLUE DASHED LINE (Now labeled as Longitude)
-    long: {
-      ...getPx(
-        (projectedRaw.value.x + props.moonPos.rawX) / 2,
-        (projectedRaw.value.y + props.moonPos.rawY) / 2,
-      ),
-      val: props.longOffset?.toFixed(1),
-    },
-
-    // WHITE LINE (Now labeled as Latitude)
-    lat: {
-      ...getPx(
-        (props.sunPos.rawX + projectedRaw.value.x) / 2,
-        (props.sunPos.rawY + projectedRaw.value.y) / 2,
-      ),
-      val: props.latOffset?.toFixed(1),
-    },
-
-    elong: {
-      ...getPx(
-        (props.sunPos.rawX + props.moonPos.rawX) / 2,
-        (props.sunPos.rawY + props.moonPos.rawY) / 2,
-      ),
-      val: props.elongation?.toFixed(1),
-    },
+    long: { ...toPixels(longMidX, longMidY), val: props.longOffset?.toFixed(1) },
+    lat: { ...toPixels(latMidX, latMidY), val: props.latOffset?.toFixed(1) },
+    elong: { ...toPixels(elongMidX, elongMidY), val: props.elongation?.toFixed(1) },
   }
 })
 </script>
