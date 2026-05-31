@@ -15,146 +15,215 @@ const props = defineProps({
 
 const toRad = (deg) => deg * (Math.PI / 180)
 
-// Define a static virtual grid for our SVG workspace (e.g., 1000x1000 units)
-const SVG_SIZE = 1000
-const CENTER = SVG_SIZE / 2
-
-// Helper to convert your raw relative coordinates to our virtual grid units
-const getVirtualCoords = (rawX, rawY) => {
-  // Your raw coordinates are already relative to a center point multiplied by vh.
-  // We mirror that logic safely inside our virtual grid.
-  return {
-    x: CENTER + (rawX * 10), // Scale factor matching your layout density
-    y: (props.horizonY / 100) * SVG_SIZE + (rawY * 10)
-  }
-}
-
-const sunV = computed(() => props.sunPos ? getVirtualCoords(props.sunPos.rawX, props.sunPos.rawY) : { x: CENTER, y: CENTER })
-const moonV = computed(() => props.moonPos ? getVirtualCoords(props.moonPos.rawX, props.moonPos.rawY) : { x: CENTER, y: CENTER })
-
-// 1. Calculate Ecliptic Line on the virtual grid
+// 1. Calculate the Ecliptic Line using raw offsets
 const eclipticLine = computed(() => {
+  // Use the same tilt logic as getPosition: (tilt - 90)
   const angle = toRad(props.tilt)
-  const length = SVG_SIZE * 2 // Long enough to span our grid boundary
+  const length = 500 // Large enough to span screen
 
   return {
-    x1: sunV.value.x - Math.cos(angle) * length,
-    y1: sunV.value.y - Math.sin(angle) * length,
-    x2: sunV.value.x + Math.cos(angle) * length,
-    y2: sunV.value.y + Math.sin(angle) * length,
+    // We start from the sun's position and move along the tilt angle
+    x1: `calc(${props.sunPos.left} - ${Math.cos(angle) * length}vh)`,
+    y1: `calc(${props.sunPos.top} - ${Math.sin(angle) * length}vh)`,
+    x2: `calc(${props.sunPos.left} + ${Math.cos(angle) * length}vh)`,
+    y2: `calc(${props.sunPos.top} + ${Math.sin(angle) * length}vh)`,
   }
 })
 
-// 2. Projected Point on the virtual grid
+// 2. The Projection (The "Ghost" point on the ecliptic)
 const projectedPoint = computed(() => {
+  const angle = toRad(props.tilt - 90)
+
+  // Use rawX/rawY which are already unitless numbers relative to the center
+  const dx = props.moonPos.rawX - props.sunPos.rawX
+  const dy = props.moonPos.rawY - props.sunPos.rawY
+
+  // Vector Projection: Dot product of (Moon-Sun) and (Ecliptic Unit Vector)
+  const mag = dx * Math.cos(angle) + dy * Math.sin(angle)
+
+  // Calculate the projected point relative to the Sun
+  const projRawX = props.sunPos.rawX + Math.cos(angle) * mag
+  const projRawY = props.sunPos.rawY + Math.sin(angle) * mag
+
+  return {
+    // Convert back to the UI coordinate system
+    x: `calc(50% + ${projRawX}vh)`,
+    y: `${props.horizonY + projRawY}%`,
+  }
+})
+
+// A centralized utility that handles screen dimension and midpoint math
+const getDimensions = () => {
+  const vh = window.innerHeight / 100
+  const centerX = window.innerWidth / 2
+  const centerY = (props.horizonY / 100) * window.innerHeight
+  return { vh, centerX, centerY }
+}
+
+// 1. Convert any Raw X/Y coordinate object to absolute screen Pixels
+const getPixelCoords = (rawX, rawY) => {
+  const { vh, centerX, centerY } = getDimensions()
+  return {
+    x: centerX + rawX * vh,
+    y: centerY + rawY * vh,
+  }
+}
+
+// 2. Compute the exact pixel spots for your Sun and Moon
+const sunPixels = computed(() => {
+  if (!props.sunPos) return { x: 0, y: 0 }
+  return getPixelCoords(props.sunPos.rawX, props.sunPos.rawY)
+})
+
+const moonPixels = computed(() => {
+  if (!props.moonPos) return { x: 0, y: 0 }
+  return getPixelCoords(props.moonPos.rawX, props.moonPos.rawY)
+})
+
+// 3. Ecliptic Line Pixels
+const eclipticLinePixels = computed(() => {
+  const { vh } = getDimensions()
+  const angle = toRad(props.tilt)
+  const length = 500 // Spans safely past edge boundaries
+
+  const sun = sunPixels.value
+
+  return {
+    x1: sun.x - Math.cos(angle) * length * vh,
+    y1: sun.y - Math.sin(angle) * length * vh,
+    x2: sun.x + Math.cos(angle) * length * vh,
+    y2: sun.y + Math.sin(angle) * length * vh,
+  }
+})
+
+// 4. Projected Point Pixels (The Ghost Point)
+const projectedPointPixels = computed(() => {
+  if (!props.sunPos || !props.moonPos) return { x: 0, y: 0 }
+
   const angle = toRad(props.tilt - 90)
   const dx = props.moonPos.rawX - props.sunPos.rawX
   const dy = props.moonPos.rawY - props.sunPos.rawY
+
   const mag = dx * Math.cos(angle) + dy * Math.sin(angle)
 
   const projRawX = props.sunPos.rawX + Math.cos(angle) * mag
   const projRawY = props.sunPos.rawY + Math.sin(angle) * mag
 
-  return getVirtualCoords(projRawX, projRawY)
+  return getPixelCoords(projRawX, projRawY)
 })
 
-// 3. Simple midpoints for text placement on the virtual grid
-const midpoints = computed(() => ({
-  long: {
-    x: (projectedPoint.value.x + moonV.value.x) / 2,
-    y: (projectedPoint.value.y + moonV.value.y) / 2,
-  },
-  lat: {
-    x: (sunV.value.x + projectedPoint.value.x) / 2,
-    y: (sunV.value.y + projectedPoint.value.y) / 2,
-  },
-  elong: {
-    x: (sunV.value.x + moonV.value.x) / 2,
-    y: (sunV.value.y + moonV.value.y) / 2,
+const projectedRaw = computed(() => {
+  if (!props.moonPos) return { x: 0, y: 0 }
+  const angle = toRad(props.tilt - 90)
+  // Vector projection of Moon onto the Ecliptic line
+  const dotProduct = props.moonPos.rawX * Math.cos(angle) + props.moonPos.rawY * Math.sin(angle)
+  return {
+    x: Math.cos(angle) * dotProduct,
+    y: Math.sin(angle) * dotProduct,
   }
-}))
+})
+
+// Calculate pixel coordinates for labels
+const labels = computed(() => {
+  const vh = window.innerHeight / 100
+  const centerX = window.innerWidth / 2
+  const centerY = (props.horizonY / 100) * window.innerHeight
+
+  const getPx = (rawX, rawY) => ({
+    x: centerX + rawX * vh,
+    y: centerY + rawY * vh,
+  })
+
+  return {
+    // BLUE DASHED LINE (Now labeled as Longitude)
+    long: {
+      ...getPx(
+        (projectedRaw.value.x + props.moonPos.rawX) / 2,
+        (projectedRaw.value.y + props.moonPos.rawY) / 2,
+      ),
+      val: props.longOffset?.toFixed(1),
+    },
+
+    // WHITE LINE (Now labeled as Latitude)
+    lat: {
+      ...getPx(
+        (props.sunPos.rawX + projectedRaw.value.x) / 2,
+        (props.sunPos.rawY + projectedRaw.value.y) / 2,
+      ),
+      val: props.latOffset?.toFixed(1),
+    },
+
+    elong: {
+      ...getPx(
+        (props.sunPos.rawX + props.moonPos.rawX) / 2,
+        (props.sunPos.rawY + props.moonPos.rawY) / 2,
+      ),
+      val: props.elongation?.toFixed(1),
+    },
+  }
+})
 </script>
 
 <template>
-  <svg 
-    :viewBox="`0 0 ${SVG_SIZE} ${SVG_SIZE}`"
-    preserveAspectRatio="xMidYMid slice"
-    class="absolute inset-0 w-full h-full pointer-events-none z-0"
-  >
-    <g v-if="props.sunPos && props.moonPos">
-      
-      <line
-        :x1="eclipticLine.x1"
-        :y1="eclipticLine.y1"
-        :x2="eclipticLine.x2"
-        :y2="eclipticLine.y2"
-        stroke="rgba(255, 255, 255, 0.15)"
-        stroke-width="2"
-        stroke-dasharray="16 8"
-      />
+  <svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
+    <line
+      :x1="eclipticLinePixels.x1"
+      :y1="eclipticLinePixels.y1"
+      :x2="eclipticLinePixels.x2"
+      :y2="eclipticLinePixels.y2"
+      stroke="rgba(255, 255, 255, 0.15)"
+      stroke-width="1"
+      stroke-dasharray="8 4"
+    />
 
-      <line
-        :x1="sunV.x"
-        :y1="sunV.y"
-        :x2="projectedPoint.x"
-        :y2="projectedPoint.y"
-        stroke="rgba(255, 255, 255, 0.3)"
-        stroke-width="2"
-      />
+    <line
+      :x1="sunPixels.x"
+      :y1="sunPixels.y"
+      :x2="projectedPointPixels.x"
+      :y2="projectedPointPixels.y"
+      stroke="rgba(255, 255, 255, 0.3)"
+      stroke-width="1"
+    />
 
-      <line
-        :x1="projectedPoint.x"
-        :y1="projectedPoint.y"
-        :x2="moonV.x"
-        :y2="moonV.y"
-        stroke="rgba(56, 189, 248, 0.5)"
-        stroke-width="3"
-        stroke-dasharray="4 4"
-      />
+    <line
+      :x1="projectedPointPixels.x"
+      :y1="projectedPointPixels.y"
+      :x2="moonPixels.x"
+      :y2="moonPixels.y"
+      stroke="rgba(56, 189, 248, 0.5)"
+      stroke-width="1.5"
+      stroke-dasharray="2 2"
+    />
 
-      <line
-        :x1="sunV.x"
-        :y1="sunV.y"
-        :x2="moonV.x"
-        :y2="moonV.y"
-        stroke="rgba(251, 191, 36, 0.4)"
-        stroke-width="4"
-      />
+    <line
+      :x1="sunPixels.x"
+      :y1="sunPixels.y"
+      :x2="moonPixels.x"
+      :y2="moonPixels.y"
+      stroke="rgba(251, 191, 36, 0.4)"
+      stroke-width="2"
+    />
 
-      <g class="fill-white text-[24px] font-bold select-none">
-        
-        <text
-          class="fill-sky-400"
-          :x="midpoints.long.x"
-          :y="midpoints.long.y"
-          dx="20"
-          dy="-20"
-        >
-          λ {{ props.longOffset?.toFixed(1) }}°
-        </text>
+    <!-- Labels Group -->
+    <g v-if="props.sunPos && props.moonPos" class="fill-white text-[12px] font-bold select-none">
+      <text class="fill-sky-400" :x="labels.long.x" :y="labels.long.y" dx="10" dy="-10">
+        λ {{ props.longOffset?.toFixed(1) }}°
+      </text>
 
-        <text
-          class="fill-white/80"
-          :x="midpoints.lat.x"
-          :y="midpoints.lat.y"
-          dy="-20"
-          text-anchor="middle"
-        >
-          β {{ props.latOffset?.toFixed(1) }}°
-        </text>
+      <text class="fill-white/80" :x="labels.lat.x" :y="labels.lat.y" dy="-10" text-anchor="middle">
+        β {{ props.latOffset?.toFixed(1) }}°
+      </text>
 
-        <text
-          class="fill-amber-400"
-          :x="midpoints.elong.x"
-          :y="midpoints.elong.y"
-          dx="-20"
-          dy="-20"
-          text-anchor="end"
-        >
-          {{ props.elongation?.toFixed(1) }}°
-        </text>
-      </g>
-      
+      <text
+        class="fill-amber-400"
+        :x="labels.elong.x"
+        :y="labels.elong.y"
+        dx="-10"
+        dy="-10"
+        text-anchor="end"
+      >
+        {{ props.elongation?.toFixed(1) }}°
+      </text>
     </g>
   </svg>
 </template>
